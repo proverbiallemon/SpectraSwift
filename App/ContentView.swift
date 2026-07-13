@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @State private var plotModel = PlotModel()
 
     var body: some View {
         NavigationSplitView {
@@ -16,7 +17,8 @@ struct ContentView: View {
                     systemImage: "waveform.path",
                     description: Text("Open or drop JCAMP-DX (.jdx, .dx) files to view them."))
             } else {
-                Text("Plot goes here")   // replaced in Task 8
+                PlotView()
+                    .environment(plotModel)
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
