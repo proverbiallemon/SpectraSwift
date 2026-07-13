@@ -9,6 +9,8 @@ struct PlotView: View {
     @State private var dragRect: CGRect?       // rubber-band in view coords
     @State private var lastTransform: PlotTransform?
     @State private var scrollMonitor: Any?
+    @State private var panStartViewport: PlotViewport?
+    @State private var viewFrame: CGRect = .zero
 
     private let inset = EdgeInsets(top: 12, leading: 56, bottom: 36, trailing: 16)
 
@@ -46,6 +48,9 @@ struct PlotView: View {
             DispatchQueue.main.async { lastTransform = captured }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { viewFrame = $0 }
         .overlay(alignment: .topTrailing) { legend }
         .overlay { rubberBand }
         .overlay { crosshairOverlay }
@@ -80,10 +85,13 @@ struct PlotView: View {
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { ev in
                 guard let t = lastTransform,
                       let window = ev.window,
-                      let view = window.contentView else { return ev }
-                let inView = view.convert(ev.locationInWindow, from: nil)
-                // flip to SwiftUI top-left coords
-                let p = CGPoint(x: inView.x, y: view.bounds.height - inView.y)
+                      let contentView = window.contentView else { return ev }
+                let inContent = contentView.convert(ev.locationInWindow, from: nil)
+                // flip to SwiftUI top-left coords, then into PlotView-local space
+                let topLeft = CGPoint(x: inContent.x,
+                                      y: contentView.bounds.height - inContent.y)
+                let p = CGPoint(x: topLeft.x - viewFrame.minX,
+                                y: topLeft.y - viewFrame.minY)
                 guard t.plotRect.insetBy(dx: -20, dy: -20).contains(p) else { return ev }
                 let factor = ev.scrollingDeltaY > 0 ? 1.1 : 1 / 1.1
                 let vp = plot.viewport ?? currentFit()
@@ -104,12 +112,17 @@ struct PlotView: View {
         DragGesture(minimumDistance: 4)
             .modifiers(.option)
             .onChanged { g in
-                guard let t = lastTransform, let vp = plot.viewport ?? currentFit() else { return }
+                guard let t = lastTransform else { return }
+                if panStartViewport == nil {
+                    panStartViewport = plot.viewport ?? currentFit()
+                }
+                guard let base = panStartViewport else { return }
                 let dxFrac = -Double(g.translation.width) / t.plotRect.width
                     * (t.xReversed ? -1 : 1)
                 let dyFrac = Double(g.translation.height) / t.plotRect.height
-                plot.viewport = vp.panned(fractionX: dxFrac, fractionY: dyFrac)
+                plot.viewport = base.panned(fractionX: dxFrac, fractionY: dyFrac)
             }
+            .onEnded { _ in panStartViewport = nil }
             .exclusively(before:
                 DragGesture(minimumDistance: 4)
                     .onChanged { g in
