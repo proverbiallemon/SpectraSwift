@@ -108,9 +108,13 @@ public enum JCAMPReader {
                 header["NTUPLES"] = ldr.value
             case "DATATABLE":
                 sawData = true
+                if !points.isEmpty {
+                    warnings.append(SpectrumWarning(
+                        "Multiple NTUPLES data tables found; only the last is shown"))
+                }
                 // form line e.g. "(XY..XY), PEAKS" or "(X++(Y..Y)), XYDATA"
                 let formLine = ldr.value.split(separator: "\n").first.map(String.init) ?? ""
-                let isPeaks = formLine.uppercased().contains("PEAKS")
+                let isPairFormat = formLine.uppercased().contains("PEAKS")
                     || formLine.uppercased().contains("XY..XY")
                 dataForm = formLine.uppercased().contains("PEAKS") ? .peaks : .continuous
                 // NTUPLES ##UNITS= gives "XUNIT, YUNIT"
@@ -122,7 +126,7 @@ public enum JCAMPReader {
                         header["XUNITS"] = parts[0]; header["YUNITS"] = parts[1]
                     }
                 }
-                if isPeaks {
+                if isPairFormat {
                     let (pts, w) = try parsePeakTable(ldr.value, header: header)
                     points = pts; warnings += w
                 } else {

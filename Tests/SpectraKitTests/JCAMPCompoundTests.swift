@@ -69,3 +69,25 @@ import Foundation
     #expect(s.points.count == 4)
     #expect(s.points.last == SpectrumPoint(x: 91, y: 9999))
 }
+
+@Test func warnsOnMultiPageNTUPLES() throws {
+    let twoPages = """
+    ##TITLE=TWO PAGES
+    ##JCAMP-DX=5.00
+    ##DATA TYPE=MASS SPECTRUM
+    ##NTUPLES=MASS SPECTRUM
+    ##UNITS=M/Z, RELATIVE ABUNDANCE
+    ##PAGE=1
+    ##DATA TABLE=(XY..XY), PEAKS
+    15,210 27,990
+    ##PAGE=2
+    ##DATA TABLE=(XY..XY), PEAKS
+    39,1220 91,9999
+    ##END NTUPLES=MASS SPECTRUM
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(twoPages.utf8), sourceURL: nil)[0]
+    #expect(s.points.count == 2)
+    #expect(s.points.first == SpectrumPoint(x: 39, y: 1220))
+    #expect(s.warnings.contains { $0.message.contains("Multiple NTUPLES") })
+}
