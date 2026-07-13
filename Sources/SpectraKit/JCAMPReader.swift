@@ -22,7 +22,30 @@ public enum JCAMPReader {
         }
         let ldrs = tokenize(text)
         guard ldrs.first?.label == "TITLE" else { throw JCAMPError.notJCAMP }
-        return try assemble(ldrs: ldrs, sourceURL: sourceURL)
+        return try splitBlocks(ldrs).flatMap {
+            try assemble(ldrs: $0, sourceURL: sourceURL)
+        }
+    }
+
+    /// A LINK block (##BLOCKS=) wraps child TITLE..END blocks. Children are
+    /// delimited by nested TITLE/END pairs; the outer wrapper itself carries
+    /// no data and is dropped.
+    static func splitBlocks(_ ldrs: [LDR]) -> [[LDR]] {
+        guard ldrs.contains(where: { $0.label == "BLOCKS" }) else { return [ldrs] }
+        var children: [[LDR]] = []
+        var current: [LDR] = []
+        var inChild = false
+        for ldr in ldrs.dropFirst() {   // drop outer TITLE
+            if ldr.label == "TITLE" {
+                inChild = true; current = [ldr]
+            } else if ldr.label == "END" {
+                if inChild, !current.isEmpty { children.append(current) }
+                inChild = false; current = []
+            } else if inChild {
+                current.append(ldr)
+            }
+        }
+        return children.isEmpty ? [ldrs] : children
     }
 
     // MARK: tokenizing
@@ -81,6 +104,33 @@ public enum JCAMPReader {
                 dataForm = ldr.label == "PEAKTABLE" ? .peaks : .continuous
                 let (pts, w) = try parsePeakTable(ldr.value, header: header)
                 points = pts; warnings += w
+            case "NTUPLES":
+                header["NTUPLES"] = ldr.value
+            case "DATATABLE":
+                sawData = true
+                // form line e.g. "(XY..XY), PEAKS" or "(X++(Y..Y)), XYDATA"
+                let formLine = ldr.value.split(separator: "\n").first.map(String.init) ?? ""
+                let isPeaks = formLine.uppercased().contains("PEAKS")
+                    || formLine.uppercased().contains("XY..XY")
+                dataForm = formLine.uppercased().contains("PEAKS") ? .peaks : .continuous
+                // NTUPLES ##UNITS= gives "XUNIT, YUNIT"
+                if let units = header["UNITS"] {
+                    let parts = units.split(separator: ",").map {
+                        $0.trimmingCharacters(in: .whitespaces)
+                    }
+                    if parts.count >= 2 {
+                        header["XUNITS"] = parts[0]; header["YUNITS"] = parts[1]
+                    }
+                }
+                if isPeaks {
+                    let (pts, w) = try parsePeakTable(ldr.value, header: header)
+                    points = pts; warnings += w
+                } else {
+                    let (pts, w) = try parseXYData(ldr.value, header: header)
+                    points = pts; warnings += w
+                }
+            case "PAGE", "ENDNTUPLES":
+                header[ldr.label] = ldr.value
             case "END":
                 break
             default:
@@ -151,7 +201,8 @@ public enum JCAMPReader {
         let yFactor = headerDouble(header, "YFACTOR") ?? 1
         let firstX = headerDouble(header, "FIRSTX")
         let lastX = headerDouble(header, "LASTX")
-        let nPoints = headerDouble(header, "NPOINTS").map(Int.init)
+        let nPoints = headerDouble(header, "NPOINTS")
+            .flatMap { $0.isFinite && $0 >= 0 && $0 < 1e12 ? Int($0) : nil }
 
         // Per-point x-increment from header, refined below if computable.
         var deltaX = headerDouble(header, "DELTAX") ?? 0
