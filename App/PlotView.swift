@@ -6,6 +6,10 @@ struct PlotView: View {
     @Environment(AppState.self) private var appState
     @Environment(PlotModel.self) private var plot
 
+    @State private var dragRect: CGRect?       // rubber-band in view coords
+    @State private var lastTransform: PlotTransform?
+    @State private var scrollMonitor: Any?
+
     private let inset = EdgeInsets(top: 12, leading: 56, bottom: 36, trailing: 16)
 
     /// Mixed y-units among visible spectra → normalize each trace 0-1.
@@ -26,9 +30,7 @@ struct PlotView: View {
         Canvas { ctx, size in
             let visible = appState.visibleSpectra
             let normalize = mustNormalize
-            let sets = visible.map {
-                plot.effectivePoints(for: $0.spectrum, normalize: normalize)
-            }
+            let sets = plot.pointSets(for: visible, normalize: normalize)
             guard let vp = plot.viewport ?? PlotViewport.fitting(sets) else { return }
             let t = PlotTransform(viewport: vp, size: size,
                                   inset: inset, xReversed: xReversed)
@@ -39,9 +41,133 @@ struct PlotView: View {
                 draw(pts, form: item.spectrum.dataForm,
                      color: item.color, in: ctx, transform: t)
             }
+
+            let captured = t
+            DispatchQueue.main.async { lastTransform = captured }
         }
         .background(Color(nsColor: .textBackgroundColor))
         .overlay(alignment: .topTrailing) { legend }
+        .overlay { rubberBand }
+        .overlay { crosshairOverlay }
+        .gesture(boxZoomOrPan)
+        .onTapGesture(count: 2) { plot.viewport = nil }   // reset to auto-fit
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let p): plot.crosshair = p
+            case .ended: plot.crosshair = nil
+            }
+        }
+        .toolbar {
+            ToolbarItem {
+                Picker("Y Display", selection: Bindable(plot).displayMode) {
+                    ForEach(IRDisplayMode.allCases, id: \.self) {
+                        Text($0.rawValue).tag($0)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .help("Convert IR spectra between transmittance and absorbance")
+            }
+            ToolbarItem {
+                Button {
+                    plot.viewport = nil
+                } label: {
+                    Label("Fit", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .help("Zoom to fit all visible spectra")
+            }
+        }
+        .onAppear {
+            scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { ev in
+                guard let t = lastTransform,
+                      let window = ev.window,
+                      let view = window.contentView else { return ev }
+                let inView = view.convert(ev.locationInWindow, from: nil)
+                // flip to SwiftUI top-left coords
+                let p = CGPoint(x: inView.x, y: view.bounds.height - inView.y)
+                guard t.plotRect.insetBy(dx: -20, dy: -20).contains(p) else { return ev }
+                let factor = ev.scrollingDeltaY > 0 ? 1.1 : 1 / 1.1
+                let vp = plot.viewport ?? currentFit()
+                guard let vp else { return ev }
+                var fx = (p.x - t.plotRect.minX) / t.plotRect.width
+                if t.xReversed { fx = 1 - fx }
+                let fy = (t.plotRect.maxY - p.y) / t.plotRect.height
+                plot.viewport = vp.zoomed(by: factor, aboutX: fx, aboutY: fy)
+                return nil
+            }
+        }
+        .onDisappear {
+            if let m = scrollMonitor { NSEvent.removeMonitor(m) }
+        }
+    }
+
+    private var boxZoomOrPan: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .modifiers(.option)
+            .onChanged { g in
+                guard let t = lastTransform, let vp = plot.viewport ?? currentFit() else { return }
+                let dxFrac = -Double(g.translation.width) / t.plotRect.width
+                    * (t.xReversed ? -1 : 1)
+                let dyFrac = Double(g.translation.height) / t.plotRect.height
+                plot.viewport = vp.panned(fractionX: dxFrac, fractionY: dyFrac)
+            }
+            .exclusively(before:
+                DragGesture(minimumDistance: 4)
+                    .onChanged { g in
+                        dragRect = CGRect(
+                            x: min(g.startLocation.x, g.location.x),
+                            y: min(g.startLocation.y, g.location.y),
+                            width: abs(g.translation.width),
+                            height: abs(g.translation.height))
+                    }
+                    .onEnded { g in
+                        defer { dragRect = nil }
+                        guard let t = lastTransform,
+                              let rect = dragRect,
+                              rect.width > 8, rect.height > 8 else { return }
+                        let a = t.dataXY(at: CGPoint(x: rect.minX, y: rect.maxY))
+                        let b = t.dataXY(at: CGPoint(x: rect.maxX, y: rect.minY))
+                        plot.viewport = PlotViewport(
+                            xLo: min(a.x, b.x), xHi: max(a.x, b.x),
+                            yLo: min(a.y, b.y), yHi: max(a.y, b.y))
+                    })
+    }
+
+    private func currentFit() -> PlotViewport? {
+        let normalize = mustNormalize
+        return PlotViewport.fitting(plot.pointSets(for: appState.visibleSpectra, normalize: normalize))
+    }
+
+    @ViewBuilder private var rubberBand: some View {
+        if let r = dragRect {
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.12))
+                .overlay(Rectangle().stroke(Color.accentColor, lineWidth: 1))
+                .frame(width: r.width, height: r.height)
+                .position(x: r.midX, y: r.midY)
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder private var crosshairOverlay: some View {
+        if let p = plot.crosshair, let t = lastTransform, t.plotRect.contains(p) {
+            let d = t.dataXY(at: p)
+            ZStack {
+                Path { path in
+                    path.move(to: CGPoint(x: p.x, y: t.plotRect.minY))
+                    path.addLine(to: CGPoint(x: p.x, y: t.plotRect.maxY))
+                    path.move(to: CGPoint(x: t.plotRect.minX, y: p.y))
+                    path.addLine(to: CGPoint(x: t.plotRect.maxX, y: p.y))
+                }
+                .stroke(Color.secondary.opacity(0.5),
+                        style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+                Text("\(labelNumber(d.x)), \(String(format: "%.4g", d.y))")
+                    .font(.caption.monospacedDigit())
+                    .padding(4)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: min(p.x + 60, t.plotRect.maxX - 50), y: max(p.y - 18, 24))
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     private func draw(_ pts: [SpectrumPoint], form: DataForm, color: Color,

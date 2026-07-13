@@ -10,7 +10,7 @@ struct PlotViewport: Equatable {
         guard let xlo = all.map(\.x).min(), let xhi = all.map(\.x).max(),
               let ylo = all.map(\.y).min(), let yhi = all.map(\.y).max() else { return nil }
         let xPad = (xhi - xlo) * 0.02, yPad = (yhi - ylo) * 0.05
-        return PlotViewport(xLo: xlo - xPad, xHi: xhi + xPad,
+        return PlotViewport(xLo: xlo - max(xPad, 1e-12), xHi: xhi + max(xPad, 1e-12),
                             yLo: ylo - yPad, yHi: yhi + max(yPad, 1e-12))
     }
 
@@ -100,6 +100,23 @@ final class PlotModel {
         case (.transmittance, .absorbance): .transmittance
         default: s.yUnit
         }
+    }
+
+    private var cachedSets: [UUID: [SpectrumPoint]] = [:]
+    private var cacheKey: String = ""
+
+    /// Cached effectivePoints, invalidated when displayMode/normalize or the
+    /// visible spectrum set changes.
+    func pointSets(for items: [LoadedSpectrum], normalize: Bool) -> [[SpectrumPoint]] {
+        let key = "\(displayMode.rawValue)|\(normalize)|" + items.map { $0.id.uuidString }.joined(separator: ",")
+        if key != cacheKey {
+            cacheKey = key
+            cachedSets = [:]
+            for item in items {
+                cachedSets[item.id] = effectivePoints(for: item.spectrum, normalize: normalize)
+            }
+        }
+        return items.compactMap { cachedSets[$0.id] }
     }
 }
 
