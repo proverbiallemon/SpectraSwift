@@ -1,0 +1,47 @@
+# project.yml — regenerate the Xcode project with: xcodegen generate
+name: Spectra
+options:
+  bundleIdPrefix: me.pbweb
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  SpectraKit:
+    path: .
+targets:
+  Spectra:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: SpectraKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: Spectra
+        CFBundleDisplayName: Spectra
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "14.0"
+        NSPrincipalClass: NSApplication
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: JCAMP-DX Spectrum
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [me.pbweb.spectra.jcamp-dx]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: me.pbweb.spectra.jcamp-dx
+            UTTypeDescription: JCAMP-DX Spectrum
+            UTTypeConformsTo: [public.text, public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [jdx, dx, jcm]
+              public.mime-type: [chemical/x-jcamp-dx]
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        SWIFT_VERSION: "6.0"
+        ENABLE_HARDENED_RUNTIME: NO
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Info.plist
