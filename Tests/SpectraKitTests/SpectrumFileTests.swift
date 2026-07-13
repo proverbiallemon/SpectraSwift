@@ -37,8 +37,16 @@ private func fixtureURL(_ name: String) throws -> URL {
 
 @Test func unreadableURLThrowsUnreadable() {
     let missing = URL(fileURLWithPath: "/nonexistent/definitely-not-here.jdx")
-    #expect(throws: SpectrumFileError.self) {
+    do {
         _ = try SpectrumFile.read(url: missing)
+        Issue.record("Expected SpectrumFileError.unreadable to be thrown")
+    } catch let e as SpectrumFileError {
+        guard case .unreadable = e else {
+            Issue.record("Expected .unreadable, got \(e)")
+            return
+        }
+    } catch {
+        Issue.record("Unexpected error type: \(error)")
     }
 }
 
