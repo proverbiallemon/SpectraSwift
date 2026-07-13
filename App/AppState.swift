@@ -25,11 +25,12 @@ struct LoadError: Identifiable {
 final class AppState {
     var spectra: [LoadedSpectrum] = []
     var selectionID: UUID?
-    var loadError: LoadError?
+    var loadErrors: [LoadError] = []
 
     private static let palette: [Color] = [
         .blue, .red, .green, .orange, .purple, .teal, .pink, .indigo, .brown, .mint,
     ]
+    private var colorCursor = 0
 
     var selected: LoadedSpectrum? {
         spectra.first { $0.id == selectionID }
@@ -43,17 +44,18 @@ final class AppState {
             do {
                 let parsed = try SpectrumFile.read(url: url)
                 for s in parsed {
-                    let color = Self.palette[spectra.count % Self.palette.count]
+                    let color = Self.palette[colorCursor % Self.palette.count]
+                    colorCursor += 1
                     spectra.append(LoadedSpectrum(spectrum: s, color: color))
                 }
                 if selectionID == nil { selectionID = spectra.last?.id }
             } catch let e as SpectrumFileError {
-                loadError = LoadError(fileName: url.lastPathComponent, reason: describe(e))
+                loadErrors.append(LoadError(fileName: url.lastPathComponent, reason: describe(e)))
             } catch let e as JCAMPError {
-                loadError = LoadError(fileName: url.lastPathComponent, reason: describe(e))
+                loadErrors.append(LoadError(fileName: url.lastPathComponent, reason: describe(e)))
             } catch {
-                loadError = LoadError(fileName: url.lastPathComponent,
-                                      reason: error.localizedDescription)
+                loadErrors.append(LoadError(fileName: url.lastPathComponent,
+                                      reason: error.localizedDescription))
             }
         }
     }

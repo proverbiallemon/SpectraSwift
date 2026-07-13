@@ -29,7 +29,7 @@ targets:
             CFBundleTypeRole: Viewer
             LSHandlerRank: Owner
             LSItemContentTypes: [me.pbweb.spectra.jcamp-dx]
-        UTImportedTypeDeclarations:
+        UTExportedTypeDeclarations:
           - UTTypeIdentifier: me.pbweb.spectra.jcamp-dx
             UTTypeDescription: JCAMP-DX Spectrum
             UTTypeConformsTo: [public.text, public.data]

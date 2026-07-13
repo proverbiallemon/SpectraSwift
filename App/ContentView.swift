@@ -6,7 +6,6 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        @Bindable var state = appState
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
@@ -24,9 +23,20 @@ struct ContentView: View {
             appState.load(urls: urls)
             return true
         }
-        .alert(item: $state.loadError) { err in
-            Alert(title: Text("Couldn't open \(err.fileName)"),
-                  message: Text(err.reason))
+        .alert(
+            appState.loadErrors.count == 1
+                ? "Couldn't open \(appState.loadErrors[0].fileName)"
+                : "Couldn't open \(appState.loadErrors.count) files",
+            isPresented: Binding(
+                get: { !appState.loadErrors.isEmpty },
+                set: { if !$0 { appState.loadErrors.removeAll() } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(appState.loadErrors
+                .map { "\($0.fileName): \($0.reason)" }
+                .joined(separator: "\n"))
         }
     }
 }
