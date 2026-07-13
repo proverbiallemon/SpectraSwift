@@ -53,13 +53,12 @@ public enum ASDFDecoder {
             if let _ = dif[ch] { flush(); currentMode = .dif; current = String(ch); continue }
             if let _ = dup[ch] { flush(); currentMode = .dup; current = String(ch); continue }
             if ch == "+" || ch == "-" {
-                // sign starts a new AFFN/PAC token unless it follows E/e (exponent)
-                if let last = current.last, last == "E" || last == "e", currentMode == .affn {
-                    current.append(ch); continue
-                }
                 flush(); currentMode = .affn; current = String(ch); continue
             }
-            if ch.isNumber || ch == "." || ch == "E" || ch == "e" {
+            // Note: exponential AFFN (1.5E-3) is NOT supported inside ASDF
+            // data lines — JCAMP-DX forbids it there because E/e are SQZ
+            // pseudo-digits. The sqz table above intercepts them.
+            if ch.isNumber || ch == "." {
                 if currentMode == nil { currentMode = .affn }
                 current.append(ch); continue
             }

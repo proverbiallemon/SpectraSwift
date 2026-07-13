@@ -37,3 +37,28 @@ import Testing
         _ = try ASDFDecoder.decodeLine("not a data line", previousY: nil)
     }
 }
+
+@Test func treatsEAsSQZPseudoDigitNotExponent() throws {
+    // JCAMP-DX forbids exponential AFFN inside ASDF lines; E is SQZ 5.
+    // "100E5" is the value 100 followed by SQZ "E5" = 55.
+    let l = try ASDFDecoder.decodeLine("400 100E5", previousY: nil)
+    #expect(l.ys == [100, 55])
+}
+
+@Test func xOnlyLineYieldsNoYs() throws {
+    let l = try ASDFDecoder.decodeLine("400", previousY: nil)
+    #expect(l.x == 400)
+    #expect(l.ys.isEmpty)
+}
+
+@Test func emptyLineThrows() {
+    #expect(throws: ASDFError.self) {
+        _ = try ASDFDecoder.decodeLine("", previousY: nil)
+    }
+}
+
+@Test func dupAsFirstYTokenThrows() {
+    #expect(throws: ASDFError.self) {
+        _ = try ASDFDecoder.decodeLine("400T", previousY: nil)
+    }
+}
