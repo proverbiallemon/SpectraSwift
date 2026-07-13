@@ -32,8 +32,11 @@ let simpleIR = """
     #expect(s.yUnit == .transmittance)
     #expect(s.dataForm == .continuous)
     #expect(s.points.count == 5)
-    #expect(s.points[0] == SpectrumPoint(x: 400, y: 0.95))
-    #expect(s.points[4] == SpectrumPoint(x: 404, y: 0.91))
+    // YFACTOR scaling is floating-point; compare with tolerance.
+    #expect(s.points[0].x == 400)
+    #expect(abs(s.points[0].y - 0.95) < 1e-12)
+    #expect(s.points[4].x == 404)
+    #expect(abs(s.points[4].y - 0.91) < 1e-12)
     #expect(s.warnings.isEmpty)
 }
 
@@ -83,4 +86,39 @@ let simpleIR = """
     #expect(throws: JCAMPError.self) {
         _ = try JCAMPReader.read(data: jcamp("hello world"), sourceURL: nil)
     }
+}
+
+@Test func warnsOnMissingDIFCheckpoint() throws {
+    let text = """
+    ##TITLE=TRUNCATED DIF
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=TRANSMITTANCE
+    ##XFACTOR=1.0
+    ##YFACTOR=1.0
+    ##FIRSTX=100
+    ##LASTX=104
+    ##NPOINTS=5
+    ##XYDATA=(X++(Y..Y))
+    100A00KKK
+    104
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    #expect(s.points.count == 4)
+    #expect(s.warnings.contains { $0.message.contains("Missing DIF checkpoint") })
+}
+
+@Test func warnsWhenXSpacingUnknown() throws {
+    let text = """
+    ##TITLE=NO HEADERS
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=TRANSMITTANCE
+    ##XYDATA=(X++(Y..Y))
+    400 950 940 930
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    #expect(s.warnings.contains { $0.message.contains("Cannot determine x spacing") })
 }

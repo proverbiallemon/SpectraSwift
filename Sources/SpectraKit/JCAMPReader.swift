@@ -163,6 +163,7 @@ public enum JCAMPReader {
         var xs: [Double] = []
         var prevEndedInDIF = false
         var runningY: Double? = nil
+        var warnedNoDeltaX = false
 
         for line in lines.dropFirst() {
             var decoded = try ASDFDecoder.decodeLine(line, previousY: runningY)
@@ -173,7 +174,17 @@ public enum JCAMPReader {
                     warnings.append(SpectrumWarning(
                         "DIF checkpoint mismatch at x=\(decoded.x): expected \(expected), got \(got)"))
                 }
-                decoded.ys.removeFirst()
+                if decoded.ys.isEmpty {
+                    warnings.append(SpectrumWarning(
+                        "Missing DIF checkpoint value on line starting \(decoded.x)"))
+                } else {
+                    decoded.ys.removeFirst()
+                }
+            }
+            if deltaX == 0, decoded.ys.count > 1, !warnedNoDeltaX {
+                warnedNoDeltaX = true
+                warnings.append(SpectrumWarning(
+                    "Cannot determine x spacing (no FIRSTX/LASTX/NPOINTS or DELTAX); multi-value lines share their line's X"))
             }
             // Consistency: line's X (scaled) should be ~ next expected X.
             if !xs.isEmpty, deltaX != 0 {
@@ -186,9 +197,7 @@ public enum JCAMPReader {
             for y in decoded.ys {
                 let x = (firstX ?? decoded.x * xFactor) + Double(xs.count) * deltaX
                 xs.append(deltaX != 0 ? x : decoded.x * xFactor)
-                // Use division for better float precision: divide by 1/factor instead of multiply
-                let scaledY = yFactor != 0 ? y / (1 / yFactor) : y * yFactor
-                ys.append(scaledY)
+                ys.append(y * yFactor)
             }
             runningY = decoded.ys.last.map { _ in
                 // running Y is in *raw* (unscaled) units for checkpoint math
