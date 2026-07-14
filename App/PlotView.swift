@@ -51,6 +51,12 @@ struct PlotView: View {
         return !traces.isEmpty && traces.allSatisfy { $0.spectrum.xUnit.isConventionallyReversed }
     }
 
+    /// Spectra currently displayed unit-converted (µm → wavenumber). Their
+    /// native-space measurements are meaningless on the converted axis.
+    private var convertedIDs: Set<UUID> {
+        Set(displayTraces.filter(\.converted).map { $0.item.id })
+    }
+
     var body: some View {
         Canvas { ctx, size in
             let traces = displayTraces
@@ -141,8 +147,7 @@ struct PlotView: View {
                                 y: topLeft.y - viewFrame.minY)
                 guard t.plotRect.insetBy(dx: -20, dy: -20).contains(p) else { return ev }
                 let factor = ev.scrollingDeltaY > 0 ? 1.1 : 1 / 1.1
-                let vp = plot.viewport ?? currentFit()
-                guard let vp else { return ev }
+                let vp = t.viewport
                 var fx = (p.x - t.plotRect.minX) / t.plotRect.width
                 if t.xReversed { fx = 1 - fx }
                 let fy = (t.plotRect.maxY - p.y) / t.plotRect.height
@@ -174,6 +179,11 @@ struct PlotView: View {
             .onEnded { g in
                 guard plot.mode != .explore, let t = lastTransform,
                       t.plotRect.contains(g.location) else { return }
+                if let target = appState.measurementTarget, convertedIDs.contains(target.id) {
+                    appState.statusText = "This spectrum is shown unit-converted — view it alone to measure in its native units"
+                    NSSound.beep()
+                    return
+                }
                 let d = t.dataXY(at: g.location)
                 switch plot.mode {
                 case .pickPeaks:
@@ -197,7 +207,7 @@ struct PlotView: View {
             .onChanged { g in
                 guard plot.mode == .explore, let t = lastTransform else { return }
                 if panStartViewport == nil {
-                    panStartViewport = plot.viewport ?? currentFit()
+                    panStartViewport = t.viewport
                 }
                 guard let base = panStartViewport else { return }
                 let dxFrac = -Double(g.translation.width) / t.plotRect.width
@@ -234,7 +244,7 @@ struct PlotView: View {
             .onChanged { g in
                 guard let t = lastTransform else { return }
                 if magnifyStartViewport == nil {
-                    magnifyStartViewport = plot.viewport ?? currentFit()
+                    magnifyStartViewport = t.viewport
                 }
                 guard let base = magnifyStartViewport else { return }
                 let p = g.startLocation
@@ -355,8 +365,14 @@ struct PlotView: View {
                                   visible: [LoadedSpectrum]) {
         guard !mustNormalize else { return }
         let visibleIDs = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0.color) })
+        let convertedIDs = convertedIDs
         for mark in appState.peaks
         where mark.displayMode == plot.displayMode.rawValue {
+            // Marks for traces currently displayed unit-converted (µm→wavenumber)
+            // are stored in native x and would land at the wrong position on the
+            // converted axis, so hide them here; they reappear when the trace
+            // displays natively.
+            guard !convertedIDs.contains(mark.spectrumID) else { continue }
             guard let color = visibleIDs[mark.spectrumID] else { continue }
             let v = t.point(SpectrumPoint(x: mark.x, y: mark.y))
             let r = CGRect(x: v.x - 4, y: v.y - 4, width: 8, height: 8)
@@ -370,6 +386,9 @@ struct PlotView: View {
         }
         for region in appState.regions
         where region.displayMode == plot.displayMode.rawValue {
+            // Same rationale as peak marks above: native-x regions are
+            // meaningless on a converted display axis, so hide them here.
+            guard !convertedIDs.contains(region.spectrumID) else { continue }
             guard let color = visibleIDs[region.spectrumID],
                   let item = visible.first(where: { $0.id == region.spectrumID })
             else { continue }
