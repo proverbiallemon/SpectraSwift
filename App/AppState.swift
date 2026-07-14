@@ -67,9 +67,21 @@ final class AppState {
 
     func remove(_ id: UUID) {
         spectra.removeAll { $0.id == id }
+        selectedResultIDs.subtract(Set(peaks.filter { $0.spectrumID == id }.map(\.id)))
+        selectedResultIDs.subtract(Set(regions.filter { $0.spectrumID == id }.map(\.id)))
         peaks.removeAll { $0.spectrumID == id }
         regions.removeAll { $0.spectrumID == id }
         if selectionID == id { selectionID = spectra.first?.id }
+    }
+
+    func deletePeak(_ id: UUID) {
+        peaks.removeAll { $0.id == id }
+        selectedResultIDs.remove(id)
+    }
+
+    func deleteRegion(_ id: UUID) {
+        regions.removeAll { $0.id == id }
+        selectedResultIDs.remove(id)
     }
 
     /// The spectrum measurements apply to: explicit selection, else the

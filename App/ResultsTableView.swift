@@ -43,7 +43,7 @@ struct ResultsTableView: View {
                             .tag(p.id)
                             .contextMenu {
                                 Button("Delete", role: .destructive) {
-                                    appState.peaks.removeAll { $0.id == p.id }
+                                    appState.deletePeak(p.id)
                                 }
                             }
                         }
@@ -62,7 +62,7 @@ struct ResultsTableView: View {
                             .tag(r.id)
                             .contextMenu {
                                 Button("Delete", role: .destructive) {
-                                    appState.regions.removeAll { $0.id == r.id }
+                                    appState.deleteRegion(r.id)
                                 }
                             }
                         }
