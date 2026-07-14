@@ -9,6 +9,22 @@ expect: IR spectra draw with the wavenumber axis running high to low,
 mass spectra draw as stick plots, and a toolbar toggle converts IR data
 between transmittance and absorbance on the fly.
 
+## Screenshots
+
+Three NIST gas-phase IR spectra overlaid on a normalized axis:
+
+![Benzene, ethylene, and CFC-113 overlaid in Explore mode](Screenshots/overlay.jpeg)
+
+Peak picking on benzene, with the picked peaks marked on the plot and
+listed in the results table below:
+
+![Peak picking on a benzene spectrum with a results table](Screenshots/peak-picking.jpeg)
+
+A Coblentz Society spectrum shown on its native wavelength axis, with
+every parameter from the file in the searchable inspector:
+
+![A single spectrum in micrometers with the parameter inspector open](Screenshots/inspector.jpeg)
+
 ## Features
 
 - **Overlay and compare** - Load any number of spectra; checkboxes in the
