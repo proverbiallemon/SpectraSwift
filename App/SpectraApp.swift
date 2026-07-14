@@ -111,6 +111,10 @@ struct SpectraApp: App {
                 Button("Reset View") { plotModel.viewport = nil }
                     .keyboardShortcut("0", modifiers: .command)
             }
+            // Restores View ▸ Show/Hide Sidebar (⌃⌘S). Without it a collapsed
+            // sidebar is unrecoverable, since the custom detail toolbar
+            // replaces the automatic sidebar-toggle button.
+            SidebarCommands()
         }
     }
 
