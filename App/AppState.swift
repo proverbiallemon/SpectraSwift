@@ -32,6 +32,7 @@ final class AppState {
     var showResultsTable = false
     var selectedResultIDs: Set<UUID> = []
     var showSubtractSheet = false
+    var showSmoothSheet = false
 
     private static let palette: [Color] = [
         .blue, .red, .green, .orange, .purple, .teal, .pink, .indigo, .brown, .mint,

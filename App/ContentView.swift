@@ -85,6 +85,7 @@ struct ContentView: View {
             return !fileURLs.isEmpty
         }
         .sheet(isPresented: $state.showSubtractSheet) { SubtractSheetView() }
+        .sheet(isPresented: $state.showSmoothSheet) { SmoothSheetView() }
         .alert(
             appState.loadErrors.count == 1
                 ? "Couldn't open \(appState.loadErrors[0].fileName)"

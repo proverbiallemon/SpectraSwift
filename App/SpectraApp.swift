@@ -106,6 +106,8 @@ struct SpectraApp: App {
             CommandMenu("Spectra") {
                 Button("Subtract…") { appState.showSubtractSheet = true }
                     .disabled(appState.spectra.count < 2)
+                Button("Smooth…") { appState.showSmoothSheet = true }
+                    .disabled(appState.spectra.isEmpty)
             }
             CommandGroup(after: .toolbar) {
                 Button("Reset View") { plotModel.viewport = nil }
