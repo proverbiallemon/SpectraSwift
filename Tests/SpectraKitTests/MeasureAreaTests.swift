@@ -50,3 +50,18 @@ private let triangle: [SpectrumPoint] = (0...10).map {
 @Test func chordBaselineHeightNilOutsideData() {
     #expect(Measure.chordBaselineHeight(points: triangle, peakX: 50, x1: 0, x2: 10) == nil)
 }
+
+@Test func interpolatedYMatchesLinearScanOnRandomishGrid() {
+    let pts = [(0.0, 1.0), (1.5, 3.0), (2.0, 2.0), (7.0, 9.0), (11.0, 0.0)]
+        .map { SpectrumPoint(x: $0.0, y: $0.1) }
+    for x in stride(from: 0.0, through: 11.0, by: 0.25) {
+        let expected: Double = {
+            if let exact = pts.first(where: { $0.x == x }) { return exact.y }
+            let hi = pts.firstIndex(where: { $0.x > x })!
+            let a = pts[hi - 1], b = pts[hi]
+            return a.y + (x - a.x) / (b.x - a.x) * (b.y - a.y)
+        }()
+        let got = Measure.interpolatedY(in: pts, at: x)
+        #expect(got != nil && abs(got! - expected) < 1e-12, "x=\(x)")
+    }
+}

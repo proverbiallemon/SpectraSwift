@@ -78,25 +78,36 @@ public enum Measure {
         return best
     }
 
-    /// Linear interpolation on the x-sorted samples; nil outside the range.
-    public static func interpolatedY(in points: [SpectrumPoint], at x: Double) -> Double? {
-        let pts = points.sorted { $0.x < $1.x }
+    /// Binary-search interpolation over an array KNOWN to be x-ascending.
+    static func interpolatedYSorted(_ pts: [SpectrumPoint], at x: Double) -> Double? {
         guard let first = pts.first, let last = pts.last,
               x >= first.x, x <= last.x else { return nil }
-        if let exact = pts.first(where: { $0.x == x }) { return exact.y }
-        guard let hi = pts.firstIndex(where: { $0.x > x }), hi > 0 else { return nil }
-        let a = pts[hi - 1], b = pts[hi]
+        var lo = 0, hi = pts.count - 1
+        while hi - lo > 1 {
+            let mid = (lo + hi) / 2
+            if pts[mid].x <= x { lo = mid } else { hi = mid }
+        }
+        if pts[lo].x == x { return pts[lo].y }
+        let a = pts[lo], b = pts[hi]
+        guard b.x > a.x else { return a.y }
         let t = (x - a.x) / (b.x - a.x)
         return a.y + t * (b.y - a.y)
     }
 
+    public static func interpolatedY(in points: [SpectrumPoint], at x: Double) -> Double? {
+        interpolatedYSorted(points.sorted { $0.x < $1.x }, at: x)
+    }
+
     /// Peak apex height above the straight line joining the curve at x1/x2.
+    /// Negative when the apex sits below the chord (e.g. a transmittance
+    /// dip measured as maxima) — callers decide how to present sign.
     public static func chordBaselineHeight(points: [SpectrumPoint], peakX: Double,
                                            x1: Double, x2: Double) -> Double? {
+        let pts = points.sorted { $0.x < $1.x }
         guard x1 != x2,
-              let apexY = interpolatedY(in: points, at: peakX),
-              let y1 = interpolatedY(in: points, at: min(x1, x2)),
-              let y2 = interpolatedY(in: points, at: max(x1, x2)) else { return nil }
+              let apexY = interpolatedYSorted(pts, at: peakX),
+              let y1 = interpolatedYSorted(pts, at: min(x1, x2)),
+              let y2 = interpolatedYSorted(pts, at: max(x1, x2)) else { return nil }
         let lo = min(x1, x2), hi = max(x1, x2)
         let chordY = y1 + (peakX - lo) / (hi - lo) * (y2 - y1)
         return apexY - chordY
@@ -109,8 +120,8 @@ public enum Measure {
         let lo = min(from, to), hi = max(from, to)
         let pts = points.sorted { $0.x < $1.x }
         guard lo != hi,
-              let yLo = interpolatedY(in: pts, at: lo),
-              let yHi = interpolatedY(in: pts, at: hi) else {
+              let yLo = interpolatedYSorted(pts, at: lo),
+              let yHi = interpolatedYSorted(pts, at: hi) else {
             throw MeasureError.emptyRegion
         }
         var xs: [SpectrumPoint] = [SpectrumPoint(x: lo, y: yLo)]
@@ -137,7 +148,7 @@ public enum Measure {
         let lo = max(aLo, bLo), hi = min(aHi, bHi)
         var pts: [SpectrumPoint] = []
         for p in aPts where p.x >= lo && p.x <= hi {
-            if let by = interpolatedY(in: bPts, at: p.x) {
+            if let by = interpolatedYSorted(bPts, at: p.x) {
                 pts.append(SpectrumPoint(x: p.x, y: p.y - by))
             }
         }

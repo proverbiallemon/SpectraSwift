@@ -1,0 +1,55 @@
+import Testing
+import Foundation
+@testable import SpectraKit
+
+@Test func sessionRoundTrips() throws {
+    let specID = UUID()
+    let inline = SessionInlineSpectrum(
+        title: "A − B", xUnit: .wavenumber, yUnit: .absorbance,
+        dataForm: .continuous,
+        points: [SpectrumPoint(x: 1, y: 2), SpectrumPoint(x: 3, y: 4)])
+    let session = SessionFile(
+        version: 1,
+        spectra: [
+            SessionSpectrumRef(id: specID, path: "/tmp/a.jdx", inline: nil,
+                               color: SessionRGBA(r: 1, g: 0, b: 0, a: 1), isVisible: true),
+            SessionSpectrumRef(id: UUID(), path: nil, inline: inline,
+                               color: SessionRGBA(r: 0, g: 1, b: 0, a: 1), isVisible: false),
+        ],
+        peaks: [PeakMark(spectrumID: specID, x: 674, y: 0.3, height: 0.25,
+                         displayMode: "As Recorded")],
+        regions: [IntegrationRegion(spectrumID: specID, x1: 600, x2: 700,
+                                    area: 12.5, displayMode: "As Recorded")],
+        viewport: SessionViewportModel(xLo: 400, xHi: 4000, yLo: 0, yHi: 1),
+        displayMode: "As Recorded", autoY: true, selectedID: specID)
+
+    let data = try session.encoded()
+    let back = try SessionFile.decode(data)
+    #expect(back.spectra.count == 2)
+    #expect(back.spectra[0].path == "/tmp/a.jdx")
+    #expect(back.spectra[1].inline?.points.count == 2)
+    #expect(back.peaks == session.peaks)
+    #expect(back.regions == session.regions)
+    #expect(back.viewport == session.viewport)
+    #expect(back.autoY == true)
+    #expect(back.selectedID == specID)
+}
+
+@Test func inlineSpectrumRebuilds() {
+    let s = SessionInlineSpectrum(
+        title: "T", xUnit: .other("WEIRD"), yUnit: .transmittance,
+        dataForm: .peaks, points: [SpectrumPoint(x: 78, y: 9999)])
+    let spectrum = s.makeSpectrum()
+    #expect(spectrum.title == "T")
+    #expect(spectrum.xUnit == .other("WEIRD"))
+    #expect(spectrum.dataForm == .peaks)
+    #expect(spectrum.points.count == 1)
+    let round = SessionInlineSpectrum(from: spectrum)
+    #expect(round.points == s.points)
+}
+
+@Test func decodeRejectsGarbage() {
+    #expect(throws: (any Error).self) {
+        _ = try SessionFile.decode(Data("not json".utf8))
+    }
+}

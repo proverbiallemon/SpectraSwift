@@ -1,18 +1,18 @@
 import Foundation
 
-public struct SpectrumPoint: Sendable, Equatable {
+public struct SpectrumPoint: Sendable, Equatable, Codable {
     public var x: Double
     public var y: Double
     public init(x: Double, y: Double) { self.x = x; self.y = y }
 }
 
 /// How the data should be rendered.
-public enum DataForm: Sendable, Equatable {
+public enum DataForm: Sendable, Equatable, Codable {
     case continuous   // IR, UV-Vis, Raman, THz — polyline
     case peaks        // mass spec — vertical sticks
 }
 
-public enum XUnit: Sendable, Equatable {
+public enum XUnit: Sendable, Equatable, Codable {
     case wavenumber          // 1/CM
     case wavelengthNm        // NANOMETERS
     case wavelengthUm        // MICROMETERS
@@ -38,7 +38,7 @@ public enum XUnit: Sendable, Equatable {
     }
 }
 
-public enum YUnit: Sendable, Equatable {
+public enum YUnit: Sendable, Equatable, Codable {
     case transmittance
     case absorbance
     case relativeIntensity
@@ -102,6 +102,9 @@ public struct Spectrum: Sendable, Identifiable {
 
     /// Wavelength-in-µm → wavenumber (cm⁻¹): x' = 10000/x. Non-µm spectra
     /// return nil. Non-positive x values cannot convert and are dropped.
+    /// The returned copy KEEPS the source's `id` — a struct copy doesn't
+    /// re-run the initializer, so callers must not rely on `Spectrum.id`
+    /// being unique across derived copies.
     public func convertedToWavenumber() -> Spectrum? {
         guard case .wavelengthUm = xUnit else { return nil }
         let converted = points
