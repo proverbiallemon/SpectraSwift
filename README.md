@@ -1,4 +1,4 @@
-# Spectra
+# SpectraDX
 
 A native macOS viewer for JCAMP-DX spectroscopy files — the format NIST
 WebBook serves for IR, mass, and UV-Vis spectra.

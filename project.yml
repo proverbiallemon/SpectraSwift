@@ -19,7 +19,7 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleName: Spectra
-        CFBundleDisplayName: Spectra
+        CFBundleDisplayName: Spectra DX
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         LSMinimumSystemVersion: "14.0"

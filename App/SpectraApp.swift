@@ -8,7 +8,7 @@ struct SpectraApp: App {
     @State private var plotModel = PlotModel()
 
     var body: some Scene {
-        Window("Spectra", id: "main") {
+        Window("Spectra DX", id: "main") {
             ContentView()
                 .environment(appState)
                 .environment(plotModel)
