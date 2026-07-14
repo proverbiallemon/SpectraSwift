@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
-    @State private var plotModel = PlotModel()
+    @Environment(PlotModel.self) private var plotModel
+    @State private var showInspector = true
 
     var body: some View {
         NavigationSplitView {
@@ -19,6 +20,17 @@ struct ContentView: View {
             } else {
                 PlotView()
                     .environment(plotModel)
+                    .inspector(isPresented: $showInspector) {
+                        InspectorView()
+                            .inspectorColumnWidth(min: 220, ideal: 280)
+                    }
+                    .toolbar {
+                        ToolbarItem {
+                            Button { showInspector.toggle() } label: {
+                                Label("Inspector", systemImage: "sidebar.right")
+                            }
+                        }
+                    }
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
