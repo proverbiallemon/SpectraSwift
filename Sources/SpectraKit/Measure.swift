@@ -50,21 +50,39 @@ public enum Measure {
         if minProminence == nil && threshold <= 0 { return [] }
         guard threshold >= 0 else { return [] }
 
-        var result: [SpectrumPoint] = []
-        for i in 1..<(pts.count - 1) {
-            guard ys[i] > ys[i - 1], ys[i] >= ys[i + 1] else { continue }
-            // Walk outward until a higher point (or the end); the prominence
-            // is the drop to the higher of the two flanking valley floors.
-            var leftMin = ys[i]
-            var j = i - 1
-            while j >= 0, ys[j] <= ys[i] { leftMin = min(leftMin, ys[j]); j -= 1 }
-            var rightMin = ys[i]
-            var k = i + 1
-            while k < pts.count, ys[k] <= ys[i] { rightMin = min(rightMin, ys[k]); k += 1 }
-            let prominence = ys[i] - max(leftMin, rightMin)
-            if prominence >= threshold {
-                result.append(pts[i])
+        // leftMin[i]: min of ys over (L(i), i] where L(i) is the nearest index
+        // left of i with ys strictly greater than ys[i]; mirror for rightMin.
+        // Each stack entry's windowMin covers the gap back to the previous
+        // surviving entry, so pops accumulate exactly the old walk's range.
+        let n = pts.count
+        var leftMin = [Double](repeating: 0, count: n)
+        var rightMin = [Double](repeating: 0, count: n)
+        var stack: [(y: Double, windowMin: Double)] = []
+        stack.reserveCapacity(n)
+        for i in 0..<n {
+            var acc = ys[i]
+            while let top = stack.last, top.y <= ys[i] {
+                acc = Swift.min(acc, top.windowMin)
+                stack.removeLast()
             }
+            leftMin[i] = acc
+            stack.append((ys[i], acc))
+        }
+        stack.removeAll(keepingCapacity: true)
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            var acc = ys[i]
+            while let top = stack.last, top.y <= ys[i] {
+                acc = Swift.min(acc, top.windowMin)
+                stack.removeLast()
+            }
+            rightMin[i] = acc
+            stack.append((ys[i], acc))
+        }
+        var result: [SpectrumPoint] = []
+        for i in 1..<(n - 1) {
+            guard ys[i] > ys[i - 1], ys[i] >= ys[i + 1] else { continue }
+            let prominence = ys[i] - Swift.max(leftMin[i], rightMin[i])
+            if prominence >= threshold { result.append(pts[i]) }
         }
         return result
     }
