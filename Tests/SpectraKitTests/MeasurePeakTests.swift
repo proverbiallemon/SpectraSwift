@@ -149,14 +149,24 @@ private func referenceDetectPeaks(in points: [SpectrumPoint],
 }
 
 @Test func detectPeaksHandlesPathologicalShouldersAtScale() {
-    // 120k-point staircase: every step is a "shoulder" the old walk
-    // traversed repeatedly (O(n^2), minutes). The stack version is O(n).
+    // Alternating floor and ever-taller spike: y = i at odd i, 0 at even i.
+    // Every odd interior index is a candidate, and in the old O(n^2) walk
+    // each candidate's left prominence scan re-crossed every earlier
+    // (smaller) spike all the way back to index 0, about 3.6e9 inner
+    // iterations at this size (measured quadratic on the reference walk:
+    // 0.37s at n=10k, 5.4s at n=40k). The stack version is O(n).
     var pts: [SpectrumPoint] = []
     for i in 0..<120_000 {
-        pts.append(SpectrumPoint(x: Double(i), y: Double(i / 2) + (i % 2 == 0 ? 0 : 0.4)))
+        pts.append(SpectrumPoint(x: Double(i), y: i % 2 == 1 ? Double(i) : 0))
     }
     let peaks = Measure.detectPeaks(in: pts, direction: .maxima, minProminence: nil)
-    // Default threshold is 5% of the ~60000 y-range; the 0.4 shoulder bumps
-    // never clear it. Finishing fast AND returning empty are the assertions.
-    #expect(peaks.isEmpty)
+    // Both valley floors of each spike are 0, so its prominence is its own
+    // height i. Default threshold is 5% of the y-range: 0.05 * 119999 =
+    // 5999.95. Candidates are the odd i in 1...119997 (endpoints excluded);
+    // those with i >= 6001 pass: (119997 - 6001) / 2 + 1 = 56999. The same
+    // formula was verified against the reference walk at n=10k (4749) and
+    // n=40k (18999).
+    #expect(peaks.count == 56999)
+    #expect(peaks.first?.x == 6001)
+    #expect(peaks.last?.x == 119_997)
 }
