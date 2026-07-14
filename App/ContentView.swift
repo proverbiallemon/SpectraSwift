@@ -33,9 +33,13 @@ struct ContentView: View {
                             .frame(minHeight: 120, idealHeight: 180, maxHeight: 320)
                     }
                 }
+                    .frame(minWidth: 420)
                     .inspector(isPresented: $showInspector) {
                         InspectorView()
-                            .inspectorColumnWidth(min: 220, ideal: 280)
+                            // Bounded on BOTH sides, like the sidebar: any
+                            // unbounded pane width lets the layout engine
+                            // recurse itself to death during divider drags.
+                            .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
                     }
                     .toolbar {
                         ToolbarItem {
