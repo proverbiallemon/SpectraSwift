@@ -110,15 +110,17 @@ public struct SessionFile: Sendable, Codable {
     public var displayMode: String
     public var autoY: Bool
     public var selectedID: UUID?
+    public var showPeakLabels: Bool?
 
     public init(version: Int = 1, spectra: [SessionSpectrumRef],
                 peaks: [PeakMark], regions: [IntegrationRegion],
                 viewport: SessionViewportModel?, displayMode: String,
-                autoY: Bool, selectedID: UUID?) {
+                autoY: Bool, selectedID: UUID?, showPeakLabels: Bool? = nil) {
         self.version = version; self.spectra = spectra; self.peaks = peaks
         self.regions = regions; self.viewport = viewport
         self.displayMode = displayMode; self.autoY = autoY
         self.selectedID = selectedID
+        self.showPeakLabels = showPeakLabels
     }
 
     public func encoded() throws -> Data {

@@ -93,3 +93,21 @@ import Foundation
     mark.label = ""   // cleared in the UI → falls back to the default
     #expect(mark.effectiveLabel == "3086.2")
 }
+
+@Test func sessionFilePersistsShowPeakLabels() throws {
+    var file = SessionFile(spectra: [], peaks: [], regions: [], viewport: nil,
+                           displayMode: "absorbance", autoY: false, selectedID: nil)
+    file.showPeakLabels = false
+    let decoded = try SessionFile.decode(file.encoded())
+    #expect(decoded.showPeakLabels == false)
+}
+
+@Test func legacySessionWithoutShowPeakLabelsDecodesAsNil() throws {
+    // A v1.0.0 session has no showPeakLabels key.
+    let legacy = """
+    {"version":1,"spectra":[],"peaks":[],"regions":[],
+     "displayMode":"absorbance","autoY":false}
+    """.data(using: .utf8)!
+    let decoded = try SessionFile.decode(legacy)
+    #expect(decoded.showPeakLabels == nil)
+}

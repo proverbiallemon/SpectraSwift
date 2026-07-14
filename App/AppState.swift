@@ -245,7 +245,8 @@ final class AppState {
                 SessionViewportModel(xLo: $0.xLo, xHi: $0.xHi, yLo: $0.yLo, yHi: $0.yHi)
             },
             displayMode: plot.displayMode.rawValue,
-            autoY: plot.autoY, selectedID: selectionID)
+            autoY: plot.autoY, selectedID: selectionID,
+            showPeakLabels: plot.showPeakLabels)
     }
 
     /// Replaces current state. Returns paths that no longer resolve, plus
@@ -298,6 +299,7 @@ final class AppState {
         }
         plot.displayMode = IRDisplayMode(rawValue: file.displayMode) ?? .native
         plot.autoY = file.autoY
+        plot.showPeakLabels = file.showPeakLabels ?? true
         plot.mode = .explore
         showResultsTable = !peaks.isEmpty || !regions.isEmpty
         selectedResultIDs = []

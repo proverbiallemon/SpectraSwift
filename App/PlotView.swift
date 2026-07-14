@@ -84,6 +84,7 @@ struct PlotView: View {
                      color: trace.item.color, in: ctx, transform: t)
             }
             drawMeasurements(ctx, t, visible: appState.visibleSpectra)
+            drawPeakLabels(ctx, t, visible: appState.visibleSpectra)
 
             let captured = t
             if lastTransform != captured {
@@ -142,6 +143,12 @@ struct PlotView: View {
                     Label("Auto Y", systemImage: "arrow.up.and.down.text.horizontal")
                 }
                 .help("Refit the y-axis to the data in the visible x range")
+            }
+            ToolbarItem {
+                Toggle(isOn: Bindable(plot).showPeakLabels) {
+                    Label("Labels", systemImage: "tag")
+                }
+                .help("Show labels above picked peaks")
             }
         }
         .onAppear {
@@ -442,6 +449,41 @@ struct PlotView: View {
             guide.addLine(to: CGPoint(x: vx, y: t.plotRect.maxY))
             ctx.stroke(guide, with: .color(.secondary),
                        style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
+        }
+    }
+
+    /// Draws each peak's effective label above its marker, in the trace's
+    /// color. Read-only during rendering, so it's safe under the layout
+    /// rules (no @State/@Observable writes).
+    private func drawPeakLabels(_ ctx: GraphicsContext, _ t: PlotTransform,
+                                visible: [LoadedSpectrum]) {
+        guard plot.showPeakLabels else { return }
+        guard !mustNormalize else { return }
+        let colors = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0.color) })
+        let convertedIDs = convertedIDs
+        var candidates: [(anchor: CGPoint, mark: PeakMark, color: Color)] = []
+        for mark in appState.peaks where mark.displayMode == plot.displayMode.rawValue {
+            guard !convertedIDs.contains(mark.spectrumID) else { continue }
+            guard let color = colors[mark.spectrumID] else { continue }
+            let v = t.point(SpectrumPoint(x: mark.x, y: mark.y))
+            guard t.plotRect.contains(v) else { continue }
+            candidates.append((v, mark, color))
+        }
+        candidates.sort { $0.anchor.x < $1.anchor.x }
+        var drawn: [CGRect] = []
+        for c in candidates {
+            let resolved = ctx.resolve(Text(c.mark.effectiveLabel)
+                .font(.caption2).foregroundStyle(c.color))
+            let size = resolved.measure(in: CGSize(width: 240, height: 40))
+            var origin = CGPoint(x: c.anchor.x - size.width / 2,
+                                 y: c.anchor.y - 8 - size.height)
+            origin.x = min(max(origin.x, t.plotRect.minX + 2),
+                           t.plotRect.maxX - size.width - 2)
+            origin.y = max(origin.y, t.plotRect.minY + 2)
+            let rect = CGRect(origin: origin, size: size)
+            if drawn.contains(where: { $0.intersects(rect) }) { continue }  // skip, never stack
+            ctx.draw(resolved, in: rect)
+            drawn.append(rect)
         }
     }
 

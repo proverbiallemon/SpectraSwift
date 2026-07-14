@@ -84,6 +84,8 @@ final class PlotModel {
     /// When true (and a manual viewport is set), the y-axis refits to the
     /// data visible in the current x range instead of holding a fixed range.
     var autoY: Bool = false
+    /// Draw effective peak labels above picked/detected marks.
+    var showPeakLabels = true
 
     var mode: PlotMode = .explore {
         didSet { if mode != .integrate { pendingX1 = nil } }
