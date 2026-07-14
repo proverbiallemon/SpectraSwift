@@ -1,0 +1,113 @@
+{
+  "brukeropus-example-file.0": {
+    "npt": 4927,
+    "fxv": 9997.720922928467,
+    "lxv": 499.4039959572754,
+    "firstAB": [
+      0.008768923580646515,
+      -0.017423229292035103,
+      0.21429963409900665,
+      0.329337477684021,
+      0.252794474363327,
+      -0.13772600889205933,
+      -1.1767736673355103,
+      -0.36193153262138367
+    ],
+    "dxu": "WN",
+    "parameterSpotChecks": {
+      "SNM": "File Test",
+      "INS": "VERTEX 80V",
+      "BMS": "KBr-Broadband",
+      "PLF": "AB"
+    }
+  },
+  "opusreader2-629266_1TP_A-1_C1.0": {
+    "npt": 3578,
+    "fxv": 7497.969434666015,
+    "lxv": 599.7604151700439,
+    "firstAB": [
+      0.2152404934167862,
+      0.22247722744941711,
+      0.2243129312992096,
+      0.21782097220420837,
+      0.2079194188117981,
+      0.20774058997631073,
+      0.22053933143615723,
+      0.2316170334815979
+    ],
+    "dxu": "WN",
+    "parameterSpotChecks": {
+      "SNM": "629266\u00921TP A-1;;;soil;soil",
+      "INS": "VERTEX 70",
+      "BMS": "KBr",
+      "PLF": "AB"
+    }
+  },
+  "opusreader2-617262_1TP_C-1_A5.0": {
+    "npt": 3578,
+    "fxv": 7497.697861283203,
+    "lxv": 599.7386920933837,
+    "firstAB": [
+      0.5524729490280151,
+      0.5807188153266907,
+      0.5908347964286804,
+      0.5672318339347839,
+      0.5316853523254395,
+      0.531299889087677,
+      0.5672495365142822,
+      0.5927561521530151
+    ],
+    "dxu": "WN",
+    "parameterSpotChecks": {
+      "SNM": "617262\u00911TP C-1;;;soil;soil",
+      "INS": "INVENIO-R",
+      "BMS": "KBr",
+      "PLF": "AB"
+    }
+  },
+  "_provenance": {
+    "generated_with": {
+      "library": "brukeropusreader",
+      "repo": "https://github.com/qedsoftware/brukeropusreader",
+      "commit": "ed13492490dcbdc3b66aefa503e81f112b8df481",
+      "license": "LGPL-3.0-or-later",
+      "note": "brukeropusreader is used locally, at dev time, purely as an oracle to generate this JSON. No brukeropusreader source is committed to the Spectra repo; only the derived numeric ground truth is. brukeropusreader's parse_series() does NOT apply the CSF (Y-Scaling Factor) parameter -- it returns the raw floats stored in the AB data block. This script applies CSF manually to produce 'firstAB' (CSF-scaled), matching what Task 8's Swift reader should also do. CSF was 1.0 for all three fixtures below, so raw and CSF-scaled values happen to be identical here; Task 8 must not assume CSF is always 1.0 in real files."
+    },
+    "cross_checked_with": {
+      "library": "brukeropus",
+      "repo": "https://github.com/joshduran/brukeropus",
+      "commit": "af5a508cef7de8089acd27a215d644ab451257dd",
+      "license": "MIT",
+      "note": "brukeropus DOES apply CSF scaling itself (file/data.py: self.y = self.params.csf * y[:self.params.npt]) and pairs data/data-status blocks more carefully than brukeropusreader (brukeropus/file/block.py: pair_data_and_status_blocks). Used to verify brukeropusreader picked the correct AB block on files with multiple absorbance-type blocks (629266_1TP_A-1_C1.0 has both 'a' and 'a_2'); confirmed brukeropusreader's naive last-match-wins AB dict entry equals brukeropus's 'a' (not 'a_2') for that file, to float32 precision."
+    },
+    "fixtures": {
+      "brukeropus-example-file.0": {
+        "source_repo": "joshduran/brukeropus",
+        "source_path": "examples/file.0",
+        "url_at_commit": "https://github.com/joshduran/brukeropus/blob/af5a508cef7de8089acd27a215d644ab451257dd/examples/file.0",
+        "license": "MIT"
+      },
+      "opusreader2-629266_1TP_A-1_C1.0": {
+        "source_repo": "spectral-cockpit/opusreader2",
+        "source_path": "inst/extdata/test_data/629266_1TP_A-1_C1.0",
+        "url_at_commit": "https://github.com/spectral-cockpit/opusreader2/blob/96f970beb0ef92ccb3ee62fc3d8b7f27e1587c41/inst/extdata/test_data/629266_1TP_A-1_C1.0",
+        "license": "MIT"
+      },
+      "opusreader2-617262_1TP_C-1_A5.0": {
+        "source_repo": "spectral-cockpit/opusreader2",
+        "source_path": "inst/extdata/test_data/617262_1TP_C-1_A5.0",
+        "url_at_commit": "https://github.com/spectral-cockpit/opusreader2/blob/96f970beb0ef92ccb3ee62fc3d8b7f27e1587c41/inst/extdata/test_data/617262_1TP_C-1_A5.0",
+        "license": "MIT"
+      }
+    },
+    "rejected_candidates": {
+      "opusreader2/inst/extdata/test_data/test_spectra.0": "brukeropusreader misparses this file's AB block (values are denormalized float garbage, e.g. 1.68e-44). Cross-check with brukeropus shows this file has no true absorbance ('a') result at all -- its real result block is Reflectance ('r'). Excluded as an AB ground-truth fixture; brukeropusreader's data_type==15 -> 'AB' assumption is not reliable in general.",
+      "opusreader2/inst/extdata/new_data/issue81_A1.1.0": "brukeropusreader reports AB len=690 vs NPT=1866; brukeropus reports len(y)==npt==1866 with correct pairing. Confirms brukeropusreader's dict-keyed-by-name block matching silently keeps the wrong data_type==15 block when a file has more than one. Excluded.",
+      "opusreader2/inst/extdata/new_data/issue82_Opus_test.0": "Similar mismatch (AB len=1154 vs NPT=1112) and the file also contains 'match'/'match_2ch' library-search result blocks that confuse the naive data_type dispatch. Excluded.",
+      "opusreader2/inst/extdata/new_data/issue94_RT_01_1_23-02-21_13-23-54.0": "No 'AB Data Parameter' block at all (NPT/FXV/LXV/DXU all None). Not usable for this ground truth shape. Excluded.",
+      "spectrochempy_data testdata/irdata/OPUS/{background,OPUS_assembled_file}.0": "spectrochempy_data (github.com/spectrochempy/spectrochempy_data) carries no LICENSE file of its own and its CONTRIBUTING.md/MAINTENANCE.md do not state a data license; the parent spectrochempy package is CeCILL-B but that does not obviously extend to this separate, unlicensed data repo. Excluded for lack of a verifiable redistribution license.",
+      "orange-spectroscopy (Quasars) peach_juice.0": "Repo is GPL-3.0. Excluded (not permissive).",
+      "pierreroudier/opusreader test_spectra.0": "Repo is GPL-3.0. Excluded (not permissive)."
+    }
+  }
+}
