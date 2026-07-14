@@ -70,11 +70,19 @@ public struct SessionSpectrumRef: Sendable, Codable, Identifiable {
     public var inline: SessionInlineSpectrum?
     public var color: SessionRGBA
     public var isVisible: Bool
+    public var fingerprint: String?
 
     public init(id: UUID, path: String?, inline: SessionInlineSpectrum?,
-                color: SessionRGBA, isVisible: Bool) {
+                color: SessionRGBA, isVisible: Bool, fingerprint: String? = nil) {
         self.id = id; self.path = path; self.inline = inline
         self.color = color; self.isVisible = isVisible
+        self.fingerprint = fingerprint
+    }
+
+    /// Cheap content identity: point count plus first/last coordinates.
+    public static func fingerprint(of s: Spectrum) -> String {
+        guard let f = s.points.first, let l = s.points.last else { return "empty" }
+        return "\(s.points.count)|\(f.x)|\(f.y)|\(l.x)|\(l.y)"
     }
 }
 

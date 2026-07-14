@@ -53,3 +53,14 @@ import Foundation
         _ = try SessionFile.decode(Data("not json".utf8))
     }
 }
+
+@Test func fingerprintDetectsContentChange() {
+    let a = SessionInlineSpectrum(title: "T", xUnit: .wavenumber, yUnit: .absorbance,
+                                  dataForm: .continuous,
+                                  points: [SpectrumPoint(x: 1, y: 2)]).makeSpectrum()
+    let b = SessionInlineSpectrum(title: "T", xUnit: .wavenumber, yUnit: .absorbance,
+                                  dataForm: .continuous,
+                                  points: [SpectrumPoint(x: 1, y: 3)]).makeSpectrum()
+    #expect(SessionSpectrumRef.fingerprint(of: a) != SessionSpectrumRef.fingerprint(of: b))
+    #expect(SessionSpectrumRef.fingerprint(of: a) == SessionSpectrumRef.fingerprint(of: a))
+}

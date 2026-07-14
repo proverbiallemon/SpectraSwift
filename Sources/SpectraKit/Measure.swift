@@ -7,6 +7,7 @@ public enum PeakDirection: String, Sendable, Codable {
 public enum MeasureError: Error, Equatable {
     case noOverlap
     case emptyRegion
+    case unitMismatch
 }
 
 /// Measurement math over spectrum point arrays. Functions sort input by x
@@ -138,6 +139,11 @@ public enum Measure {
     /// A − B: b linearly interpolated onto a's grid over the overlapping
     /// x-range. Result inherits a's units and form.
     public static func subtract(_ a: Spectrum, minus b: Spectrum) throws -> Spectrum {
+        let a = a.convertedToWavenumber() ?? a
+        let b = b.convertedToWavenumber() ?? b
+        guard a.xUnit == b.xUnit else {
+            throw MeasureError.unitMismatch
+        }
         let aPts = a.points.sorted { $0.x < $1.x }
         let bPts = b.points.sorted { $0.x < $1.x }
         guard let aLo = aPts.first?.x, let aHi = aPts.last?.x,
@@ -155,7 +161,11 @@ public enum Measure {
         var warnings: [SpectrumWarning] = []
         if lo > aLo || hi < aHi {
             warnings.append(SpectrumWarning(
-                "Subtraction limited to the overlap \(lo)–\(hi); points outside it were dropped"))
+                "Subtraction limited to the overlap \(String(format: "%.6g", lo))–\(String(format: "%.6g", hi)); points outside it were dropped"))
+        }
+        if a.yUnit != b.yUnit {
+            warnings.append(SpectrumWarning(
+                "Subtracted spectra have different y-units (\(a.yUnit.label) − \(b.yUnit.label))"))
         }
         return Spectrum(
             title: "\(a.title) − \(b.title)",

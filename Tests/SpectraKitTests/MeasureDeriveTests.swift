@@ -60,3 +60,27 @@ private func spec(_ title: String, xUnit: XUnit = .wavenumber,
     let wn = try #require(um.convertedToWavenumber())
     #expect(wn.points == [SpectrumPoint(x: 5000, y: 0.5)])
 }
+
+@Test func subtractRefusesMismatchedXUnits() {
+    let ir = spec("IR", xUnit: .wavenumber, [(200, 1), (800, 1)])
+    let uv = spec("UV", xUnit: .wavelengthNm, [(200, 1), (800, 1)])
+    #expect(throws: MeasureError.unitMismatch) {
+        _ = try Measure.subtract(ir, minus: uv)
+    }
+}
+
+@Test func subtractConvertsMicrometerOperand() throws {
+    let ir = spec("IR", xUnit: .wavenumber, [(1000, 5), (2500, 5), (5000, 5)])
+    let um = spec("UM", xUnit: .wavelengthUm, [(2.0, 1), (4.0, 1), (10.0, 1)])
+    // µm operand converts to wavenumber 1000/2500/5000 with y=1 → d = 4 everywhere.
+    let d = try Measure.subtract(ir, minus: um)
+    #expect(d.points.map(\.y).allSatisfy { abs($0 - 4) < 1e-9 })
+    #expect(d.points.count == 3)
+}
+
+@Test func subtractWarnsOnMixedYUnits() throws {
+    let a = spec("A", yUnit: .absorbance, [(0, 5), (1, 5)])
+    let b = spec("B", yUnit: .transmittance, [(0, 1), (1, 1)])
+    let d = try Measure.subtract(a, minus: b)
+    #expect(d.warnings.contains { $0.message.contains("different y-units") })
+}
