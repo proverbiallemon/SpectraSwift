@@ -7,12 +7,11 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(PlotModel.self) private var plotModel
     @State private var showInspector = true
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         @Bindable var plot = plotModel
         @Bindable var state = appState
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView {
             SidebarView()
                 // The max width is load-bearing: without it, dragging the
                 // divider could inflate the sidebar without bound, and the
@@ -39,15 +38,6 @@ struct ContentView: View {
                             .inspectorColumnWidth(min: 220, ideal: 280)
                     }
                     .toolbar {
-                        ToolbarItem(placement: .navigation) {
-                            Button {
-                                columnVisibility =
-                                    columnVisibility == .detailOnly ? .all : .detailOnly
-                            } label: {
-                                Label("Toggle Sidebar", systemImage: "sidebar.left")
-                            }
-                            .help("Show or hide the spectra list")
-                        }
                         ToolbarItem {
                             Picker("Mode", selection: $plot.mode) {
                                 ForEach(PlotMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
