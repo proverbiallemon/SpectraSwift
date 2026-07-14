@@ -93,6 +93,15 @@ final class AppState {
         selectedResultIDs.remove(id)
     }
 
+    /// True when visible spectra mix y-unit kinds and the plot normalizes
+    /// each trace 0-1 for display. Mirrors PlotView's own `mustNormalize`
+    /// (display-mode aware via `plot.effectiveYUnit(for:)`) so both the
+    /// plot's rendering guard and AppState's measurement guards agree.
+    func displayIsNormalized(plot: PlotModel) -> Bool {
+        let units = Set(visibleSpectra.map { plot.effectiveYUnit(for: $0.spectrum).label })
+        return units.count > 1
+    }
+
     /// IDs of visible µm spectra that display unit-converted because a
     /// wavenumber spectrum is also visible.
     var convertedDisplayIDs: Set<UUID> {
@@ -179,6 +188,11 @@ final class AppState {
     }
 
     func autoDetectPeaks(plot: PlotModel) {
+        guard !displayIsNormalized(plot: plot) else {
+            statusText = "Mixed y-units are normalized for display — view this spectrum alone to measure"
+            NSSound.beep()
+            return
+        }
         guard let target = requireTarget() else { return }
         // Same refusal as manual picking: detecting peaks in native µm space
         // while the trace displays converted would fill the table with marks
@@ -218,7 +232,8 @@ final class AppState {
             if let url = item.spectrum.sourceURL {
                 return SessionSpectrumRef(id: item.id, path: url.path,
                                           inline: nil, color: rgba,
-                                          isVisible: item.isVisible)
+                                          isVisible: item.isVisible,
+                                          fingerprint: SessionSpectrumRef.fingerprint(of: item.spectrum))
             }
             return SessionSpectrumRef(id: item.id, path: nil,
                                       inline: SessionInlineSpectrum(from: item.spectrum),
@@ -233,16 +248,28 @@ final class AppState {
             autoY: plot.autoY, selectedID: selectionID)
     }
 
-    /// Replaces current state. Returns paths that no longer resolve.
+    /// Replaces current state. Returns paths that no longer resolve, plus
+    /// (appended to the same list) path-based sources whose on-disk content
+    /// has changed since the session was saved — those spectra still load,
+    /// but their marks/regions are stale x/y positions against a different
+    /// curve, so they're dropped rather than silently mis-plotted.
     func restoreSession(_ file: SessionFile, plot: PlotModel) -> [String] {
         var missing: [String] = []
+        var changedPaths: [String] = []
         var newSpectra: [LoadedSpectrum] = []
         var idMap: [UUID: UUID] = [:]   // session id → live LoadedSpectrum id
+        var droppedMeasurementRefIDs: Set<UUID> = []   // session ids whose marks/regions are stale
         for ref in file.spectra {
             let spectrum: Spectrum?
             if let path = ref.path {
                 spectrum = (try? SpectrumFile.read(url: URL(fileURLWithPath: path)))?.first
-                if spectrum == nil { missing.append(path) }
+                if spectrum == nil {
+                    missing.append(path)
+                } else if let savedFingerprint = ref.fingerprint, let loaded = spectrum,
+                          savedFingerprint != SessionSpectrumRef.fingerprint(of: loaded) {
+                    changedPaths.append(path)
+                    droppedMeasurementRefIDs.insert(ref.id)
+                }
             } else {
                 spectrum = ref.inline?.makeSpectrum()
             }
@@ -256,12 +283,13 @@ final class AppState {
             newSpectra.append(item)
         }
         spectra = newSpectra
+        let droppedLiveIDs = Set(droppedMeasurementRefIDs.compactMap { idMap[$0] })
         peaks = file.peaks.compactMap { p in
-            guard let live = idMap[p.spectrumID] else { return nil }
+            guard let live = idMap[p.spectrumID], !droppedLiveIDs.contains(live) else { return nil }
             var copy = p; copy.spectrumID = live; return copy
         }
         regions = file.regions.compactMap { r in
-            guard let live = idMap[r.spectrumID] else { return nil }
+            guard let live = idMap[r.spectrumID], !droppedLiveIDs.contains(live) else { return nil }
             var copy = r; copy.spectrumID = live; return copy
         }
         selectionID = file.selectedID.flatMap { idMap[$0] } ?? spectra.first?.id
@@ -274,7 +302,9 @@ final class AppState {
         showResultsTable = !peaks.isEmpty || !regions.isEmpty
         selectedResultIDs = []
         statusText = nil
-        return missing
+        return missing + changedPaths.map {
+            "\($0) (file changed since the session was saved — its measurements were dropped)"
+        }
     }
 
     private func describe(_ e: SpectrumFileError) -> String {

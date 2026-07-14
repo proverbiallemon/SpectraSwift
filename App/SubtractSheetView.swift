@@ -48,8 +48,12 @@ struct SubtractSheetView: View {
             let d = try Measure.subtract(a.spectrum, minus: b.spectrum)
             appState.addDerived(d)
             dismiss()
-        } catch {
+        } catch MeasureError.unitMismatch {
+            errorText = "These spectra use different x-axis units, so subtracting them isn't meaningful."
+        } catch MeasureError.noOverlap {
             errorText = "These spectra don't overlap on the x-axis, so there's nothing to subtract."
+        } catch {
+            errorText = error.localizedDescription
         }
     }
 }

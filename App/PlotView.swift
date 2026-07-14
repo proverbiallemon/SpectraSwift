@@ -21,11 +21,10 @@ struct PlotView: View {
     private let inset = EdgeInsets(top: 12, leading: 56, bottom: 36, trailing: 16)
 
     /// Mixed y-units among visible spectra → normalize each trace 0-1.
+    /// Delegates to AppState so every measurement guard shares this exact
+    /// definition of "normalized display" with the plot's own rendering.
     private var mustNormalize: Bool {
-        let units = Set(appState.visibleSpectra.map {
-            plot.effectiveYUnit(for: $0.spectrum).label
-        })
-        return units.count > 1
+        appState.displayIsNormalized(plot: plot)
     }
 
     /// What actually draws: µm spectra convert to wavenumber when they
@@ -102,7 +101,7 @@ struct PlotView: View {
         .gesture(measurementTap, including: plot.mode == .explore ? .subviews : .all)
         .gesture(boxZoomOrPan)
         .simultaneousGesture(pinchZoom)
-        .onTapGesture(count: 2) { plot.viewport = nil }   // reset to auto-fit
+        .onTapGesture(count: 2) { if plot.mode == .explore { plot.viewport = nil } }   // reset to auto-fit (Explore only)
         .onContinuousHover { phase in
             switch phase {
             case .active(let p): plot.crosshair = p
@@ -147,6 +146,8 @@ struct PlotView: View {
                                       y: contentView.bounds.height - inContent.y)
                 let p = CGPoint(x: topLeft.x - viewFrame.minX,
                                 y: topLeft.y - viewFrame.minY)
+                guard p.x >= 0, p.y >= 0,
+                      p.x <= viewFrame.width, p.y <= viewFrame.height else { return ev }
                 guard t.plotRect.insetBy(dx: -20, dy: -20).contains(p) else { return ev }
                 let factor = ev.scrollingDeltaY > 0 ? 1.1 : 1 / 1.1
                 let vp = t.viewport
@@ -181,6 +182,12 @@ struct PlotView: View {
             .onEnded { g in
                 guard plot.mode != .explore, let t = lastTransform,
                       t.plotRect.contains(g.location) else { return }
+                if mustNormalize {
+                    appState.statusText = "Mixed y-units are normalized for display — view this spectrum alone to measure"
+                    NSSound.beep()
+                    plot.pendingX1 = nil
+                    return
+                }
                 if let target = appState.measurementTarget, convertedIDs.contains(target.id) {
                     appState.statusText = "This spectrum is shown unit-converted — view it alone to measure in its native units"
                     NSSound.beep()
@@ -296,7 +303,7 @@ struct PlotView: View {
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(.thinMaterial, in: Capsule())
                 .padding(.bottom, 46)
-                .task {
+                .task(id: appState.statusText) {
                     try? await Task.sleep(for: .seconds(2.5))
                     appState.statusText = nil
                 }
