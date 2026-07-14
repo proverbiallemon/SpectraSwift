@@ -9,6 +9,34 @@ expect: IR spectra draw with the wavenumber axis running high to low,
 mass spectra draw as stick plots, and a toolbar toggle converts IR data
 between transmittance and absorbance on the fly.
 
+## Installing
+
+Grab `SpectraSwift-<version>.zip` from the
+[latest release](https://github.com/proverbiallemon/SpectraSwift/releases/latest),
+unzip it, and drag `Spectra.app` into `/Applications`.
+
+**First launch:** the app isn't notarized with Apple (no paid developer
+account behind it), so macOS will warn you. Right-click the app, choose
+**Open**, then click **Open** in the dialog — you only have to do this
+once. If you prefer the terminal:
+
+```sh
+xattr -cr /Applications/Spectra.app
+```
+
+Building from source (below) avoids the warning entirely.
+
+## Known issues
+
+- Dragging the sidebar divider to the right can leave the spectra list
+  looking blank. Nothing is lost — toggle the sidebar closed and open
+  again (View ▸ Hide/Show Sidebar, ⌃⌘S) and it comes back.
+- The sidebar occasionally starts hidden after a restart; the same
+  shortcut brings it in.
+- Measuring is deliberately disabled while a spectrum is displayed
+  unit-converted or on a mixed-unit normalized overlay — show the
+  spectrum by itself to measure it in its native units.
+
 ## Features
 
 - **Overlay and compare** — load any number of spectra; checkboxes in the
