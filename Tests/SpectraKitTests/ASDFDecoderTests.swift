@@ -62,3 +62,9 @@ import Testing
         _ = try ASDFDecoder.decodeLine("400T", previousY: nil)
     }
 }
+
+@Test func rejectsImplausiblyLargeDUP() {
+    #expect(throws: ASDFError.self) {
+        _ = try ASDFDecoder.decodeLine("1 5 s999999999", previousY: nil)
+    }
+}

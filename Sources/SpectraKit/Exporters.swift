@@ -31,10 +31,13 @@ public enum JCAMPExporter {
         case .relativeIntensity: "RELATIVE INTENSITY"
         case .other(let o): o
         }
+        let dataType = s.parameters.first {
+            $0.key.uppercased().replacingOccurrences(of: " ", with: "") == "DATATYPE"
+        }?.value ?? (s.dataForm == .peaks ? "MASS SPECTRUM" : "SPECTRUM")
         var out = """
         ##TITLE=\(s.title)
         ##JCAMP-DX=4.24
-        ##DATA TYPE=\(s.dataForm == .peaks ? "MASS SPECTRUM" : "INFRARED SPECTRUM")
+        ##DATA TYPE=\(dataType)
         ##ORIGIN=\(s.origin)
         ##OWNER=\(s.owner)
         ##XUNITS=\(xu)

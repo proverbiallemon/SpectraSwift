@@ -110,6 +110,9 @@ public enum ASDFDecoder {
                       let count = Int(String(base) + tok.text.dropFirst()) else {
                     throw ASDFError.malformed("Bad DUP token '\(tok.text)'")
                 }
+                guard count <= 1_000_000 else {
+                    throw ASDFError.malformed("DUP repeat count \(count) is implausibly large")
+                }
                 // DUP repeats the previous token (count-1) more times.
                 guard !ys.isEmpty else {
                     throw ASDFError.malformed("DUP with no preceding value")

@@ -52,6 +52,7 @@ private func fixture(_ name: String) throws -> Data {
         data: try fixture("benzene-uv.jdx"), sourceURL: nil).first)
     #expect(s.dataForm == .continuous)
     #expect(s.points.count > 10)
+    #expect(s.xUnit == .wavelengthNm)
 
     // Pin the exact first XYPOINTS pair (XFACTOR=YFACTOR=1.0):
     // ##XYPOINTS=(XY..XY)

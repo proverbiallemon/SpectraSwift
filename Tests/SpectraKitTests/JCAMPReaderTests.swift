@@ -122,3 +122,61 @@ let simpleIR = """
     let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
     #expect(s.warnings.contains { $0.message.contains("Cannot determine x spacing") })
 }
+
+@Test func usesLineAbscissaWhenFIRSTXAbsent() throws {
+    let text = """
+    ##TITLE=NO FIRSTX
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=ABSORBANCE
+    ##XFACTOR=1.0
+    ##YFACTOR=1.0
+    ##DELTAX=4.0
+    ##XYDATA=(X++(Y..Y))
+    450 1 2 3
+    462 4 5 6
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    #expect(s.points.map(\.x) == [450, 454, 458, 462, 466, 470])
+}
+
+@Test func warnsOnDIFCheckpointMismatch() throws {
+    let text = """
+    ##TITLE=BAD CHECKPOINT
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=TRANSMITTANCE
+    ##XFACTOR=1.0
+    ##YFACTOR=1.0
+    ##FIRSTX=100
+    ##LASTX=105
+    ##NPOINTS=6
+    ##XYDATA=(X++(Y..Y))
+    100A00KKK
+    104A99%%
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    #expect(s.warnings.contains { $0.message.contains("DIF checkpoint mismatch") })
+}
+
+@Test func parsesDescendingXFile() throws {
+    let text = """
+    ##TITLE=DESCENDING
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=ABSORBANCE
+    ##XFACTOR=1.0
+    ##YFACTOR=1.0
+    ##FIRSTX=4000
+    ##LASTX=3996
+    ##NPOINTS=5
+    ##XYDATA=(X++(Y..Y))
+    4000 1 2 3
+    3997 4 5
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    #expect(s.points.map(\.x) == [4000, 3999, 3998, 3997, 3996])
+}

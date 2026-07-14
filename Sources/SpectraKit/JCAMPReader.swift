@@ -171,7 +171,7 @@ public enum JCAMPReader {
     static func xUnit(from s: String) -> XUnit {
         switch normalizeLabel(s) {
         case "1CM", "CM1", "1PERCM": .wavenumber
-        case "NANOMETERS", "NM": .wavelengthNm
+        case "NANOMETERS", "NM", "WAVELENGTH(NM)": .wavelengthNm
         case "MICROMETERS", "MICRONS": .wavelengthUm
         case "MZ", "MASSCHARGE", "AMU": .massCharge
         case "SECONDS", "S": .seconds
@@ -249,9 +249,18 @@ public enum JCAMPReader {
                         "X checkpoint off at line starting \(decoded.x)"))
                 }
             }
-            for y in decoded.ys {
-                let x = (firstX ?? decoded.x * xFactor) + Double(xs.count) * deltaX
-                xs.append(deltaX != 0 ? x : decoded.x * xFactor)
+            for (i, y) in decoded.ys.enumerated() {
+                let x: Double
+                if deltaX != 0 {
+                    if let f = firstX {
+                        x = f + Double(xs.count) * deltaX
+                    } else {
+                        x = decoded.x * xFactor + Double(i) * deltaX
+                    }
+                } else {
+                    x = decoded.x * xFactor
+                }
+                xs.append(x)
                 ys.append(y * yFactor)
             }
             runningY = decoded.ys.last.map { _ in
