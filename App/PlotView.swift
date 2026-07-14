@@ -93,7 +93,17 @@ struct PlotView: View {
         .background(Color(nsColor: .textBackgroundColor))
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .global)
-        } action: { viewFrame = $0 }
+        } action: { newFrame in
+            // This action can fire inside AppKit's layout pass. Writing
+            // @State synchronously there re-enters layout; under live resize
+            // that recursion overflowed the stack and AppKit persisted
+            // garbage split-view frames, bricking subsequent launches.
+            // Defer the write and drop no-op updates.
+            guard viewFrame != newFrame else { return }
+            DispatchQueue.main.async {
+                if viewFrame != newFrame { viewFrame = newFrame }
+            }
+        }
         .overlay(alignment: .topTrailing) { legend }
         .overlay { rubberBand }
         .overlay { crosshairOverlay }

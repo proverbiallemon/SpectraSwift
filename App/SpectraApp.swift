@@ -8,6 +8,30 @@ struct SpectraApp: App {
     @State private var appState = AppState()
     @State private var plotModel = PlotModel()
 
+    init() {
+        Self.scrubCorruptWindowState()
+    }
+
+    /// A layout crash mid-resize once left absurd split-view frames in the
+    /// autosaved window state; restoring them hung every subsequent launch.
+    /// Drop any persisted frame with an implausible dimension before the
+    /// window restores.
+    private static func scrubCorruptWindowState() {
+        let defaults = UserDefaults.standard
+        let splitKey = "NSSplitView Subview Frames main, SidebarNavigationSplitView"
+        guard let frames = defaults.array(forKey: splitKey) as? [String] else { return }
+        let corrupt = frames.contains { frame in
+            let parts = frame.split(separator: ",").compactMap {
+                Double($0.trimmingCharacters(in: .whitespaces))
+            }
+            return parts.count >= 4 && (parts[2] > 100_000 || parts[3] > 100_000)
+        }
+        if corrupt {
+            defaults.removeObject(forKey: splitKey)
+            defaults.removeObject(forKey: "NSWindow Frame main")
+        }
+    }
+
     var body: some Scene {
         Window("Spectra Swift", id: "main") {
             ContentView()
