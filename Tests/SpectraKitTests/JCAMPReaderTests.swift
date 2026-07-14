@@ -180,3 +180,61 @@ let simpleIR = """
     let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
     #expect(s.points.map(\.x) == [4000, 3999, 3998, 3997, 3996])
 }
+
+@Test func acceptsDIFStyleLineAbscissas() throws {
+    // NIST QUANT-IR files print each line's abscissa as the x of the LAST
+    // point of the PREVIOUS line (the DIF convention) even for AFFN data,
+    // rounded to two decimals. Lines below are verbatim from the NIST
+    // ethylene file (74-85-1). This must parse without X-checkpoint noise.
+    let text = """
+    ##TITLE=QUANT-IR STYLE
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=(micromol/mol)-1m-1 (base 10)
+    ##XFACTOR=1.0
+    ##YFACTOR=9.0949E-13
+    ##DELTAX=0.9645
+    ##FIRSTX=574.687
+    ##LASTX=596.8705
+    ##NPOINTS=24
+    ##XYDATA=(X++(Y..Y))
+    574.69 22026-482234-32458-284438-582706-792194
+    579.51-269184-551000-151942-628202-46092-688632
+    585.29-46384-606414-121196-751872-250420-607850
+    591.08-109928-746922-90724-710960 200530-616346
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    #expect(s.points.count == 24)
+    #expect(s.points[0].x == 574.687)
+    #expect(abs(s.points[0].y - 22026 * 9.0949E-13) < 1e-18)
+    #expect(s.warnings.isEmpty)
+}
+
+@Test func capsXCheckpointWarningFlood() throws {
+    // Genuinely wrong abscissas on many lines: warn, but summarize past 3.
+    let text = """
+    ##TITLE=DRIFTING
+    ##JCAMP-DX=4.24
+    ##XUNITS=1/CM
+    ##YUNITS=ABSORBANCE
+    ##XFACTOR=1.0
+    ##YFACTOR=1.0
+    ##DELTAX=1.0
+    ##FIRSTX=100
+    ##LASTX=111
+    ##NPOINTS=12
+    ##XYDATA=(X++(Y..Y))
+    100 1 2
+    900 3 4
+    901 5 6
+    902 7 8
+    903 9 10
+    904 11 12
+    ##END=
+    """
+    let s = try JCAMPReader.read(data: Data(text.utf8), sourceURL: nil)[0]
+    let xWarnings = s.warnings.filter { $0.message.contains("X checkpoint") }
+    #expect(xWarnings.count == 4)
+    #expect(xWarnings.last?.message.contains("more lines") == true)
+}

@@ -219,6 +219,7 @@ public enum JCAMPReader {
         var prevEndedInDIF = false
         var runningY: Double? = nil
         var warnedNoDeltaX = false
+        var xCheckpointMisses = 0
 
         for line in lines.dropFirst() {
             var decoded = try ASDFDecoder.decodeLine(line, previousY: runningY)
@@ -241,12 +242,22 @@ public enum JCAMPReader {
                 warnings.append(SpectrumWarning(
                     "Cannot determine x spacing (no FIRSTX/LASTX/NPOINTS or DELTAX); multi-value lines share their line's X"))
             }
-            // Consistency: line's X (scaled) should be ~ next expected X.
-            if !xs.isEmpty, deltaX != 0 {
-                let expectedX = (firstX ?? 0) + Double(xs.count) * deltaX
-                if abs(decoded.x * xFactor - expectedX) > abs(deltaX) {
-                    warnings.append(SpectrumWarning(
-                        "X checkpoint off at line starting \(decoded.x)"))
+            // Consistency: a line's leading X may legally announce either the
+            // first NEW point on the line, or — the DIF convention, which
+            // NIST QUANT-IR files also use for AFFN data — the LAST point of
+            // the previous line, one step earlier. Accept both, with slack
+            // for the rounded abscissas real files print.
+            if !xs.isEmpty, deltaX != 0, let f = firstX {
+                let lineX = decoded.x * xFactor
+                let expectedNext = f + Double(xs.count) * deltaX
+                let expectedPrev = expectedNext - deltaX
+                let offBy = min(abs(lineX - expectedNext), abs(lineX - expectedPrev))
+                if offBy > abs(deltaX) / 2 {
+                    xCheckpointMisses += 1
+                    if xCheckpointMisses <= 3 {
+                        warnings.append(SpectrumWarning(
+                            "X checkpoint off at line starting \(decoded.x)"))
+                    }
                 }
             }
             for (i, y) in decoded.ys.enumerated() {
@@ -270,6 +281,10 @@ public enum JCAMPReader {
             prevEndedInDIF = decoded.endedInDIF
         }
 
+        if xCheckpointMisses > 3 {
+            warnings.append(SpectrumWarning(
+                "X checkpoint off on \(xCheckpointMisses - 3) more lines"))
+        }
         if let n = nPoints, n != ys.count {
             warnings.append(SpectrumWarning(
                 "NPOINTS says \(n) but file contains \(ys.count) points"))
