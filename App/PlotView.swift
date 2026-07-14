@@ -53,8 +53,10 @@ struct PlotView: View {
 
     /// Spectra currently displayed unit-converted (µm → wavenumber). Their
     /// native-space measurements are meaningless on the converted axis.
+    /// Delegates to AppState so every measurement entry point (tap gesture,
+    /// Find Peaks) shares the same source of truth.
     private var convertedIDs: Set<UUID> {
-        Set(displayTraces.filter(\.converted).map { $0.item.id })
+        appState.convertedDisplayIDs
     }
 
     var body: some View {
@@ -182,6 +184,9 @@ struct PlotView: View {
                 if let target = appState.measurementTarget, convertedIDs.contains(target.id) {
                     appState.statusText = "This spectrum is shown unit-converted — view it alone to measure in its native units"
                     NSSound.beep()
+                    // A guide line captured pre-conversion would draw at a
+                    // native-µm x on the converted axis — drop it too.
+                    plot.pendingX1 = nil
                     return
                 }
                 let d = t.dataXY(at: g.location)

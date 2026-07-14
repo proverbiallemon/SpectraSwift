@@ -93,6 +93,21 @@ final class AppState {
         selectedResultIDs.remove(id)
     }
 
+    /// IDs of visible µm spectra that display unit-converted because a
+    /// wavenumber spectrum is also visible.
+    var convertedDisplayIDs: Set<UUID> {
+        let visible = visibleSpectra
+        let hasWavenumber = visible.contains {
+            if case .wavenumber = $0.spectrum.xUnit { return true }
+            return false
+        }
+        guard hasWavenumber else { return [] }
+        return Set(visible.filter {
+            if case .wavelengthUm = $0.spectrum.xUnit { return true }
+            return false
+        }.map(\.id))
+    }
+
     /// The spectrum measurements apply to: explicit selection, else the
     /// only visible spectrum.
     var measurementTarget: LoadedSpectrum? {
@@ -165,6 +180,14 @@ final class AppState {
 
     func autoDetectPeaks(plot: PlotModel) {
         guard let target = requireTarget() else { return }
+        // Same refusal as manual picking: detecting peaks in native µm space
+        // while the trace displays converted would fill the table with marks
+        // the plot simultaneously hides.
+        guard !convertedDisplayIDs.contains(target.id) else {
+            statusText = "This spectrum is shown unit-converted — view it alone to measure in its native units"
+            NSSound.beep()
+            return
+        }
         let pts = plot.effectivePoints(for: target.spectrum, normalize: false)
         let unit = plot.effectiveYUnit(for: target.spectrum)
         let found = Measure.detectPeaks(
