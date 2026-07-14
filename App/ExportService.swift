@@ -174,7 +174,7 @@ enum SessionIO {
     static func save(_ file: SessionFile) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [utType]
-        panel.nameFieldStringValue = "Untitled.sdxsession"
+        panel.nameFieldStringValue = "Untitled.spectrasession"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do { try file.encoded().write(to: url) }
         catch { NSAlert(error: error).runModal() }
@@ -196,7 +196,7 @@ enum SessionIO {
         } catch {
             let alert = NSAlert()
             alert.messageText = "Couldn't open session"
-            alert.informativeText = "\(url.lastPathComponent) isn't a readable Spectra DX session: \(error.localizedDescription)"
+            alert.informativeText = "\(url.lastPathComponent) isn't a readable Spectra Swift session: \(error.localizedDescription)"
             alert.runModal()
             return nil
         }

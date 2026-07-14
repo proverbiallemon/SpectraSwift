@@ -9,12 +9,12 @@ struct SpectraApp: App {
     @State private var plotModel = PlotModel()
 
     var body: some Scene {
-        Window("Spectra DX", id: "main") {
+        Window("Spectra Swift", id: "main") {
             ContentView()
                 .environment(appState)
                 .environment(plotModel)
                 .onOpenURL { url in
-                    if url.pathExtension == "sdxsession" {
+                    if url.pathExtension == "spectrasession" {
                         if let file = SessionIO.openSession(at: url) {
                             let missing = appState.restoreSession(file, plot: plotModel)
                             if !missing.isEmpty { presentMissing(missing) }

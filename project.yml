@@ -19,7 +19,7 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleName: Spectra
-        CFBundleDisplayName: Spectra DX
+        CFBundleDisplayName: Spectra Swift
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         LSMinimumSystemVersion: "14.0"
@@ -29,7 +29,7 @@ targets:
             CFBundleTypeRole: Viewer
             LSHandlerRank: Owner
             LSItemContentTypes: [me.pbweb.spectra.jcamp-dx]
-          - CFBundleTypeName: Spectra DX Session
+          - CFBundleTypeName: Spectra Swift Session
             CFBundleTypeRole: Editor
             LSHandlerRank: Owner
             LSItemContentTypes: [me.pbweb.spectra.session]
@@ -41,10 +41,10 @@ targets:
               public.filename-extension: [jdx, dx, jcm]
               public.mime-type: [chemical/x-jcamp-dx]
           - UTTypeIdentifier: me.pbweb.spectra.session
-            UTTypeDescription: Spectra DX Session
+            UTTypeDescription: Spectra Swift Session
             UTTypeConformsTo: [public.json]
             UTTypeTagSpecification:
-              public.filename-extension: [sdxsession]
+              public.filename-extension: [spectrasession]
     settings:
       base:
         CODE_SIGN_IDENTITY: "-"

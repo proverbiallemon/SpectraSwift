@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Spectra DX</string>
+	<string>Spectra Swift</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -22,7 +22,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Spectra DX Session</string>
+			<string>Spectra Swift Session</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -83,14 +83,14 @@
 				<string>public.json</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Spectra DX Session</string>
+			<string>Spectra Swift Session</string>
 			<key>UTTypeIdentifier</key>
 			<string>me.pbweb.spectra.session</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
-					<string>sdxsession</string>
+					<string>spectrasession</string>
 				</array>
 			</dict>
 		</dict>

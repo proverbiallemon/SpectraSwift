@@ -66,8 +66,8 @@ struct ContentView: View {
         }
         .dropDestination(for: URL.self) { urls, _ in
             let fileURLs = urls.filter(\.isFileURL)
-            let sessionURLs = fileURLs.filter { $0.pathExtension == "sdxsession" }
-            let spectrumURLs = fileURLs.filter { $0.pathExtension != "sdxsession" }
+            let sessionURLs = fileURLs.filter { $0.pathExtension == "spectrasession" }
+            let spectrumURLs = fileURLs.filter { $0.pathExtension != "spectrasession" }
             for url in sessionURLs {
                 if let file = SessionIO.openSession(at: url) {
                     let missing = appState.restoreSession(file, plot: plotModel)
