@@ -29,6 +29,8 @@ final class AppState {
     var peaks: [PeakMark] = []
     var regions: [IntegrationRegion] = []
     var statusText: String?   // transient refusals ("no spectrum selected")
+    var showResultsTable = false
+    var selectedResultIDs: Set<UUID> = []
 
     private static let palette: [Color] = [
         .blue, .red, .green, .orange, .purple, .teal, .pink, .indigo, .brown, .mint,
@@ -107,6 +109,7 @@ final class AppState {
             $0.spectrumID == mark.spectrumID && $0.x == mark.x
                 && $0.displayMode == mark.displayMode }) else { return }
         peaks.append(mark)
+        showResultsTable = true
     }
 
     /// Baseline rule: a peak inside an existing integration region (same
@@ -132,6 +135,7 @@ final class AppState {
             regions.append(IntegrationRegion(
                 spectrumID: target.id, x1: x1, x2: x2, area: area,
                 displayMode: plot.displayMode.rawValue))
+            showResultsTable = true
         } catch {
             statusText = "That range contains no data to integrate"
             NSSound.beep()
@@ -156,6 +160,7 @@ final class AppState {
                 peaks.append(mark)
             }
         }
+        if !found.isEmpty { showResultsTable = true }
         statusText = found.isEmpty ? "No peaks found" : nil
     }
 

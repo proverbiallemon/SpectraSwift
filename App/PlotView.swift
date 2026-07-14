@@ -320,6 +320,10 @@ struct PlotView: View {
             ctx.fill(Path(ellipseIn: r), with: .color(color))
             ctx.stroke(Path(ellipseIn: r.insetBy(dx: -2, dy: -2)),
                        with: .color(color.opacity(0.5)), lineWidth: 1)
+            if appState.selectedResultIDs.contains(mark.id) {
+                ctx.stroke(Path(ellipseIn: r.insetBy(dx: -5, dy: -5)),
+                           with: .color(.primary), lineWidth: 1.5)
+            }
         }
         for region in appState.regions
         where region.displayMode == plot.displayMode.rawValue {
@@ -339,8 +343,12 @@ struct PlotView: View {
             var chord = Path()
             chord.move(to: t.point(pts[0]))
             chord.addLine(to: t.point(pts[pts.count - 1]))
-            ctx.stroke(chord, with: .color(color.opacity(0.7)),
-                       style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            if appState.selectedResultIDs.contains(region.id) {
+                ctx.stroke(chord, with: .color(color.opacity(0.9)), lineWidth: 2)
+            } else {
+                ctx.stroke(chord, with: .color(color.opacity(0.7)),
+                           style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            }
         }
         // Pending first integration click: vertical guide line.
         if plot.mode == .integrate, let x1 = plot.pendingX1 {

@@ -19,8 +19,15 @@ struct ContentView: View {
                     systemImage: "waveform.path",
                     description: Text("Open or drop JCAMP-DX (.jdx, .dx) files to view them."))
             } else {
-                PlotView()
-                    .environment(plotModel)
+                VSplitView {
+                    PlotView()
+                        .environment(plotModel)
+                        .frame(minHeight: 240)
+                    if appState.showResultsTable {
+                        ResultsTableView()
+                            .frame(minHeight: 120, idealHeight: 180, maxHeight: 320)
+                    }
+                }
                     .inspector(isPresented: $showInspector) {
                         InspectorView()
                             .inspectorColumnWidth(min: 220, ideal: 280)
@@ -37,6 +44,15 @@ struct ContentView: View {
                             Button("Find Peaks") { appState.autoDetectPeaks(plot: plotModel) }
                                 .disabled(plotModel.mode != .pickPeaks)
                                 .help("Automatically find peaks in the selected spectrum")
+                        }
+                        ToolbarItem {
+                            Button {
+                                appState.showResultsTable.toggle()
+                            } label: {
+                                Label("Results", systemImage: "tablecells")
+                            }
+                            .help("Show or hide the measurements table")
+                            .keyboardShortcut("t", modifiers: [.command, .shift])
                         }
                         ToolbarItem {
                             Button { showInspector.toggle() } label: {

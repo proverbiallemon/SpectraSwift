@@ -81,6 +81,75 @@ enum ExportService {
         }
     }
 
+    static func resultsTSV(peaks: [PeakMark], regions: [IntegrationRegion],
+                           spectrumTitles: [UUID: String]) -> String {
+        var out = ""
+        if !peaks.isEmpty {
+            out += "Type\tSpectrum\tX\tY\tHeight\tMeasured as\n"
+            for p in peaks {
+                out += "Peak\t\(spectrumTitles[p.spectrumID] ?? "removed")\t\(p.x)\t\(p.y)\t\(p.height.map { String($0) } ?? "")\t\(p.displayMode)\n"
+            }
+        }
+        if !regions.isEmpty {
+            out += "Type\tSpectrum\tX1\tX2\tArea\tMeasured as\n"
+            for r in regions {
+                out += "Area\t\(spectrumTitles[r.spectrumID] ?? "removed")\t\(r.x1)\t\(r.x2)\t\(r.area)\t\(r.displayMode)\n"
+            }
+        }
+        return out
+    }
+
+    /// Builds a proper CSV (rows as arrays, fields quoted per RFC 4180) rather
+    /// than converting the TSV with a naive tab→comma replace, since spectrum
+    /// titles can themselves contain commas or quotes.
+    static func resultsCSV(peaks: [PeakMark], regions: [IntegrationRegion],
+                           spectrumTitles: [UUID: String]) -> String {
+        var out = ""
+        if !peaks.isEmpty {
+            out += csvRow(["Type", "Spectrum", "X", "Y", "Height", "Measured as"])
+            for p in peaks {
+                out += csvRow([
+                    "Peak", spectrumTitles[p.spectrumID] ?? "removed",
+                    String(p.x), String(p.y),
+                    p.height.map { String($0) } ?? "", p.displayMode,
+                ])
+            }
+        }
+        if !regions.isEmpty {
+            out += csvRow(["Type", "Spectrum", "X1", "X2", "Area", "Measured as"])
+            for r in regions {
+                out += csvRow([
+                    "Area", spectrumTitles[r.spectrumID] ?? "removed",
+                    String(r.x1), String(r.x2), String(r.area), r.displayMode,
+                ])
+            }
+        }
+        return out
+    }
+
+    private static func csvField(_ field: String) -> String {
+        guard field.contains(",") || field.contains("\"") || field.contains("\n") else {
+            return field
+        }
+        return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
+    private static func csvRow(_ fields: [String]) -> String {
+        fields.map(csvField).joined(separator: ",") + "\n"
+    }
+
+    static func exportResultsCSV(peaks: [PeakMark], regions: [IntegrationRegion],
+                                 spectrumTitles: [UUID: String]) {
+        let csv = resultsCSV(peaks: peaks, regions: regions,
+                             spectrumTitles: spectrumTitles)
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "measurements.csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try csv.write(to: url, atomically: true, encoding: .utf8) }
+        catch { presentError(error) }
+    }
+
     private static func suggestedName(_ s: Spectrum, ext: String) -> String {
         let base = s.title.isEmpty ? "spectrum" : s.title
         return base.replacingOccurrences(of: "/", with: "-") + "." + ext
