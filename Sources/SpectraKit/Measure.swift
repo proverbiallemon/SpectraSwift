@@ -44,7 +44,10 @@ public enum Measure {
         let ys = pts.map { sign * $0.y }
         let yLo = ys.min() ?? 0, yHi = ys.max() ?? 0
         let threshold = minProminence ?? (yHi - yLo) * 0.05
-        guard threshold > 0 else { return [] }
+        // Default threshold on a flat spectrum is 0 — nothing meaningful to
+        // find. An EXPLICIT 0 means "keep every local extremum".
+        if minProminence == nil && threshold <= 0 { return [] }
+        guard threshold >= 0 else { return [] }
 
         var result: [SpectrumPoint] = []
         for i in 1..<(pts.count - 1) {
@@ -73,5 +76,51 @@ public enum Measure {
             best = i; bestDist = abs(p.x - x)
         }
         return best
+    }
+
+    /// Linear interpolation on the x-sorted samples; nil outside the range.
+    public static func interpolatedY(in points: [SpectrumPoint], at x: Double) -> Double? {
+        let pts = points.sorted { $0.x < $1.x }
+        guard let first = pts.first, let last = pts.last,
+              x >= first.x, x <= last.x else { return nil }
+        if let exact = pts.first(where: { $0.x == x }) { return exact.y }
+        guard let hi = pts.firstIndex(where: { $0.x > x }), hi > 0 else { return nil }
+        let a = pts[hi - 1], b = pts[hi]
+        let t = (x - a.x) / (b.x - a.x)
+        return a.y + t * (b.y - a.y)
+    }
+
+    /// Peak apex height above the straight line joining the curve at x1/x2.
+    public static func chordBaselineHeight(points: [SpectrumPoint], peakX: Double,
+                                           x1: Double, x2: Double) -> Double? {
+        guard x1 != x2,
+              let apexY = interpolatedY(in: points, at: peakX),
+              let y1 = interpolatedY(in: points, at: min(x1, x2)),
+              let y2 = interpolatedY(in: points, at: max(x1, x2)) else { return nil }
+        let lo = min(x1, x2), hi = max(x1, x2)
+        let chordY = y1 + (peakX - lo) / (hi - lo) * (y2 - y1)
+        return apexY - chordY
+    }
+
+    /// Signed trapezoidal area between the curve and the chord joining the
+    /// curve values at the (clamped, interpolated) endpoints.
+    public static func integrate(points: [SpectrumPoint], from: Double,
+                                 to: Double) throws -> Double {
+        let lo = min(from, to), hi = max(from, to)
+        let pts = points.sorted { $0.x < $1.x }
+        guard lo != hi,
+              let yLo = interpolatedY(in: pts, at: lo),
+              let yHi = interpolatedY(in: pts, at: hi) else {
+            throw MeasureError.emptyRegion
+        }
+        var xs: [SpectrumPoint] = [SpectrumPoint(x: lo, y: yLo)]
+        xs += pts.filter { $0.x > lo && $0.x < hi }
+        xs.append(SpectrumPoint(x: hi, y: yHi))
+        var curveArea = 0.0
+        for i in 1..<xs.count {
+            curveArea += (xs[i].x - xs[i - 1].x) * (xs[i].y + xs[i - 1].y) / 2
+        }
+        let chordArea = (hi - lo) * (yLo + yHi) / 2
+        return curveArea - chordArea
     }
 }

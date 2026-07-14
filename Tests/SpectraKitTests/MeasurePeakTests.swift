@@ -78,3 +78,17 @@ private let triangle: [SpectrumPoint] = (0...10).map {
     let peaks = Measure.detectPeaks(in: pts, direction: .minima, minProminence: nil)
     #expect(peaks.map { $0.x } == [5])
 }
+
+@Test func explicitZeroProminenceKeepsAllExtrema() {
+    var pts: [SpectrumPoint] = []
+    for i in 0...24 {
+        let x = Double(i)
+        var y = 0.0
+        y = max(y, 10 - 2 * abs(x - 5))
+        y = max(y, 6 - 2 * abs(x - 15))
+        if i == 20 { y += 0.3 }
+        pts.append(SpectrumPoint(x: x, y: y))
+    }
+    let all = Measure.detectPeaks(in: pts, direction: .maxima, minProminence: 0)
+    #expect(all.map(\.x).contains(20))
+}
