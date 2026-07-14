@@ -58,7 +58,7 @@ struct SpectraApp: App {
 
     private var exportSize: CGSize { CGSize(width: 900, height: 560) }
     private var exportPlot: some View {
-        PlotView()
+        PlotView(interactive: false)
             .environment(appState)
             .environment(plotModel)
             .background(Color.white)

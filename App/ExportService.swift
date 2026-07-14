@@ -57,7 +57,10 @@ enum ExportService {
     }
 
     static func exportImage(_ data: Data?, ext: String, name: String) {
-        guard let data else { return }
+        guard let data else {
+            presentFailure("Couldn't render the plot image.")
+            return
+        }
         let panel = NSSavePanel()
         panel.allowedContentTypes = ext == "png" ? [.png] : [.pdf]
         panel.nameFieldStringValue = name
@@ -66,10 +69,15 @@ enum ExportService {
     }
 
     static func copyToPasteboard(png: Data?) {
-        guard let png else { return }
+        guard let png else {
+            presentFailure("Couldn't render the plot image.")
+            return
+        }
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setData(png, forType: .png)
+        if !pb.setData(png, forType: .png) {
+            presentFailure("Couldn't write the plot image to the clipboard.")
+        }
     }
 
     private static func suggestedName(_ s: Spectrum, ext: String) -> String {
@@ -79,5 +87,12 @@ enum ExportService {
 
     private static func presentError(_ error: Error) {
         NSAlert(error: error).runModal()
+    }
+
+    private static func presentFailure(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 }

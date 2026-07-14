@@ -12,6 +12,8 @@ struct PlotView: View {
     @State private var panStartViewport: PlotViewport?
     @State private var viewFrame: CGRect = .zero
 
+    var interactive: Bool = true
+
     private let inset = EdgeInsets(top: 12, leading: 56, bottom: 36, trailing: 16)
 
     /// Mixed y-units among visible spectra → normalize each trace 0-1.
@@ -82,6 +84,7 @@ struct PlotView: View {
             }
         }
         .onAppear {
+            guard interactive, scrollMonitor == nil else { return }
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { ev in
                 guard let t = lastTransform,
                       let window = ev.window,
