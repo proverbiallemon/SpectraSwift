@@ -166,3 +166,32 @@ enum ExportService {
         alert.runModal()
     }
 }
+
+@MainActor
+enum SessionIO {
+    static let utType = UTType(exportedAs: "me.pbweb.spectra.session")
+
+    static func save(_ file: SessionFile) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [utType]
+        panel.nameFieldStringValue = "Untitled.sdxsession"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try file.encoded().write(to: url) }
+        catch { NSAlert(error: error).runModal() }
+    }
+
+    static func open() -> SessionFile? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [utType]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        do { return try SessionFile.decode(Data(contentsOf: url)) }
+        catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't open session"
+            alert.informativeText = "\(url.lastPathComponent) isn't a readable Spectra DX session: \(error.localizedDescription)"
+            alert.runModal()
+            return nil
+        }
+    }
+}

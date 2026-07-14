@@ -1,5 +1,6 @@
 // App/SpectraApp.swift
 import SwiftUI
+import SpectraKit
 import UniformTypeIdentifiers
 
 @main
@@ -12,13 +13,36 @@ struct SpectraApp: App {
             ContentView()
                 .environment(appState)
                 .environment(plotModel)
-                .onOpenURL { appState.load(urls: [$0]) }
+                .onOpenURL { url in
+                    if url.pathExtension == "sdxsession" {
+                        if let data = try? Data(contentsOf: url),
+                           let file = try? SessionFile.decode(data) {
+                            let missing = appState.restoreSession(file, plot: plotModel)
+                            if !missing.isEmpty { presentMissing(missing) }
+                        }
+                    } else {
+                        appState.load(urls: [url])
+                    }
+                }
                 .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open…") { openFiles() }
                     .keyboardShortcut("o")
+            }
+            CommandGroup(replacing: .saveItem) {
+                Button("Save Session…") {
+                    SessionIO.save(appState.captureSession(plot: plotModel))
+                }
+                .keyboardShortcut("s")
+                .disabled(appState.spectra.isEmpty)
+                Button("Open Session…") {
+                    guard let file = SessionIO.open() else { return }
+                    let missing = appState.restoreSession(file, plot: plotModel)
+                    if !missing.isEmpty { presentMissing(missing) }
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandGroup(after: .saveItem) {
                 Divider()
@@ -85,5 +109,15 @@ struct SpectraApp: App {
         if panel.runModal() == .OK {
             appState.load(urls: panel.urls)
         }
+    }
+
+    @MainActor private func presentMissing(_ paths: [String]) {
+        let alert = NSAlert()
+        alert.messageText = paths.count == 1
+            ? "One file couldn't be found"
+            : "\(paths.count) files couldn't be found"
+        alert.informativeText = "The rest of the session loaded. Missing:\n"
+            + paths.joined(separator: "\n")
+        alert.runModal()
     }
 }

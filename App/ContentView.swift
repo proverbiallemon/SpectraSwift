@@ -1,5 +1,6 @@
 // App/ContentView.swift
 import SwiftUI
+import SpectraKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -65,7 +66,16 @@ struct ContentView: View {
         }
         .dropDestination(for: URL.self) { urls, _ in
             let fileURLs = urls.filter(\.isFileURL)
-            appState.load(urls: fileURLs)
+            let sessionURLs = fileURLs.filter { $0.pathExtension == "sdxsession" }
+            let spectrumURLs = fileURLs.filter { $0.pathExtension != "sdxsession" }
+            for url in sessionURLs {
+                if let data = try? Data(contentsOf: url),
+                   let file = try? SessionFile.decode(data) {
+                    let missing = appState.restoreSession(file, plot: plotModel)
+                    if !missing.isEmpty { presentMissing(missing) }
+                }
+            }
+            appState.load(urls: spectrumURLs)
             return !fileURLs.isEmpty
         }
         .sheet(isPresented: $state.showSubtractSheet) { SubtractSheetView() }
@@ -84,5 +94,15 @@ struct ContentView: View {
                 .map { "\($0.fileName): \($0.reason)" }
                 .joined(separator: "\n"))
         }
+    }
+
+    @MainActor private func presentMissing(_ paths: [String]) {
+        let alert = NSAlert()
+        alert.messageText = paths.count == 1
+            ? "One file couldn't be found"
+            : "\(paths.count) files couldn't be found"
+        alert.informativeText = "The rest of the session loaded. Missing:\n"
+            + paths.joined(separator: "\n")
+        alert.runModal()
     }
 }

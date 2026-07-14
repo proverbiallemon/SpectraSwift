@@ -208,6 +208,75 @@ final class AppState {
         statusText = found.isEmpty ? "No peaks found" : nil
     }
 
+    func captureSession(plot: PlotModel) -> SessionFile {
+        let refs = spectra.map { item -> SessionSpectrumRef in
+            let rgba: SessionRGBA = {
+                let ns = NSColor(item.color).usingColorSpace(.sRGB) ?? .black
+                return SessionRGBA(r: ns.redComponent, g: ns.greenComponent,
+                                   b: ns.blueComponent, a: ns.alphaComponent)
+            }()
+            if let url = item.spectrum.sourceURL {
+                return SessionSpectrumRef(id: item.id, path: url.path,
+                                          inline: nil, color: rgba,
+                                          isVisible: item.isVisible)
+            }
+            return SessionSpectrumRef(id: item.id, path: nil,
+                                      inline: SessionInlineSpectrum(from: item.spectrum),
+                                      color: rgba, isVisible: item.isVisible)
+        }
+        return SessionFile(
+            spectra: refs, peaks: peaks, regions: regions,
+            viewport: plot.viewport.map {
+                SessionViewportModel(xLo: $0.xLo, xHi: $0.xHi, yLo: $0.yLo, yHi: $0.yHi)
+            },
+            displayMode: plot.displayMode.rawValue,
+            autoY: plot.autoY, selectedID: selectionID)
+    }
+
+    /// Replaces current state. Returns paths that no longer resolve.
+    func restoreSession(_ file: SessionFile, plot: PlotModel) -> [String] {
+        var missing: [String] = []
+        var newSpectra: [LoadedSpectrum] = []
+        var idMap: [UUID: UUID] = [:]   // session id → live LoadedSpectrum id
+        for ref in file.spectra {
+            let spectrum: Spectrum?
+            if let path = ref.path {
+                spectrum = (try? SpectrumFile.read(url: URL(fileURLWithPath: path)))?.first
+                if spectrum == nil { missing.append(path) }
+            } else {
+                spectrum = ref.inline?.makeSpectrum()
+            }
+            guard let spectrum else { continue }
+            let item = LoadedSpectrum(
+                spectrum: spectrum,
+                color: Color(.sRGB, red: ref.color.r, green: ref.color.g,
+                             blue: ref.color.b, opacity: ref.color.a))
+            item.isVisible = ref.isVisible
+            idMap[ref.id] = item.id
+            newSpectra.append(item)
+        }
+        spectra = newSpectra
+        peaks = file.peaks.compactMap { p in
+            guard let live = idMap[p.spectrumID] else { return nil }
+            var copy = p; copy.spectrumID = live; return copy
+        }
+        regions = file.regions.compactMap { r in
+            guard let live = idMap[r.spectrumID] else { return nil }
+            var copy = r; copy.spectrumID = live; return copy
+        }
+        selectionID = file.selectedID.flatMap { idMap[$0] } ?? spectra.first?.id
+        plot.viewport = file.viewport.map {
+            PlotViewport(xLo: $0.xLo, xHi: $0.xHi, yLo: $0.yLo, yHi: $0.yHi)
+        }
+        plot.displayMode = IRDisplayMode(rawValue: file.displayMode) ?? .native
+        plot.autoY = file.autoY
+        plot.mode = .explore
+        showResultsTable = !peaks.isEmpty || !regions.isEmpty
+        selectedResultIDs = []
+        statusText = nil
+        return missing
+    }
+
     private func describe(_ e: SpectrumFileError) -> String {
         switch e {
         case .unrecognizedFormat:

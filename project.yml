@@ -29,6 +29,10 @@ targets:
             CFBundleTypeRole: Viewer
             LSHandlerRank: Owner
             LSItemContentTypes: [me.pbweb.spectra.jcamp-dx]
+          - CFBundleTypeName: Spectra DX Session
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes: [me.pbweb.spectra.session]
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: me.pbweb.spectra.jcamp-dx
             UTTypeDescription: JCAMP-DX Spectrum
@@ -36,6 +40,11 @@ targets:
             UTTypeTagSpecification:
               public.filename-extension: [jdx, dx, jcm]
               public.mime-type: [chemical/x-jcamp-dx]
+          - UTTypeIdentifier: me.pbweb.spectra.session
+            UTTypeDescription: Spectra DX Session
+            UTTypeConformsTo: [public.json]
+            UTTypeTagSpecification:
+              public.filename-extension: [sdxsession]
     settings:
       base:
         CODE_SIGN_IDENTITY: "-"
