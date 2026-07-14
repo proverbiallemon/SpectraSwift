@@ -85,15 +85,15 @@ enum ExportService {
                            spectrumTitles: [UUID: String]) -> String {
         var out = ""
         if !peaks.isEmpty {
-            out += "Type\tSpectrum\tX\tY\tHeight\tMeasured as\n"
+            out += "Type\tSpectrum\tX\tY\tHeight\tMeasured as\tLabel\n"
             for p in peaks {
-                out += "Peak\t\(spectrumTitles[p.spectrumID] ?? "removed")\t\(p.x)\t\(p.y)\t\(p.height.map { String($0) } ?? "")\t\(p.displayMode)\n"
+                out += "Peak\t\(spectrumTitles[p.spectrumID] ?? "removed")\t\(p.x)\t\(p.y)\t\(p.height.map { String($0) } ?? "")\t\(p.displayMode)\t\(p.effectiveLabel)\n"
             }
         }
         if !regions.isEmpty {
-            out += "Type\tSpectrum\tX1\tX2\tArea\tMeasured as\n"
+            out += "Type\tSpectrum\tX1\tX2\tArea\tMeasured as\tLabel\n"
             for r in regions {
-                out += "Area\t\(spectrumTitles[r.spectrumID] ?? "removed")\t\(r.x1)\t\(r.x2)\t\(r.area)\t\(r.displayMode)\n"
+                out += "Area\t\(spectrumTitles[r.spectrumID] ?? "removed")\t\(r.x1)\t\(r.x2)\t\(r.area)\t\(r.displayMode)\t\n"
             }
         }
         return out
@@ -106,21 +106,21 @@ enum ExportService {
                            spectrumTitles: [UUID: String]) -> String {
         var out = ""
         if !peaks.isEmpty {
-            out += csvRow(["Type", "Spectrum", "X", "Y", "Height", "Measured as"])
+            out += csvRow(["Type", "Spectrum", "X", "Y", "Height", "Measured as", "Label"])
             for p in peaks {
                 out += csvRow([
                     "Peak", spectrumTitles[p.spectrumID] ?? "removed",
                     String(p.x), String(p.y),
-                    p.height.map { String($0) } ?? "", p.displayMode,
+                    p.height.map { String($0) } ?? "", p.displayMode, p.effectiveLabel,
                 ])
             }
         }
         if !regions.isEmpty {
-            out += csvRow(["Type", "Spectrum", "X1", "X2", "Area", "Measured as"])
+            out += csvRow(["Type", "Spectrum", "X1", "X2", "Area", "Measured as", "Label"])
             for r in regions {
                 out += csvRow([
                     "Area", spectrumTitles[r.spectrumID] ?? "removed",
-                    String(r.x1), String(r.x2), String(r.area), r.displayMode,
+                    String(r.x1), String(r.x2), String(r.area), r.displayMode, "",
                 ])
             }
         }

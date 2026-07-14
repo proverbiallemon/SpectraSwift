@@ -29,9 +29,15 @@ struct ResultsTableView: View {
             List(selection: $state.selectedResultIDs) {
                 if !appState.peaks.isEmpty {
                     Section("Peaks") {
-                        ForEach(appState.peaks) { p in
+                        ForEach($state.peaks) { $p in
                             HStack {
                                 Text(title(for: p.spectrumID)).frame(maxWidth: 150, alignment: .leading).lineLimit(1)
+                                TextField("Label", text: Binding(
+                                    get: { p.label ?? "" },
+                                    set: { p.label = $0.isEmpty ? nil : $0 }
+                                ))
+                                .textFieldStyle(.plain)
+                                .frame(minWidth: 90, maxWidth: 160)
                                 Text("x \(sig4(p.x))").monospacedDigit()
                                 Text("y \(sig4(p.y))").monospacedDigit()
                                 if let h = p.height {
