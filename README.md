@@ -17,7 +17,9 @@ unzip it, and drag `Spectra.app` into `/Applications`.
 
 **First launch:** the app isn't notarized with Apple (no paid developer
 account behind it), so macOS will warn you. Right-click the app, choose
-**Open**, then click **Open** in the dialog — you only have to do this
+**Open**, then click **Open** in the dialog.  If you're on newer versions 
+of Mac OS you will have to go to system settings after you try to open it, 
+and click open anyway to launch — you only have to do this
 once. If you prefer the terminal:
 
 ```sh
