@@ -69,8 +69,7 @@ struct ContentView: View {
             let sessionURLs = fileURLs.filter { $0.pathExtension == "sdxsession" }
             let spectrumURLs = fileURLs.filter { $0.pathExtension != "sdxsession" }
             for url in sessionURLs {
-                if let data = try? Data(contentsOf: url),
-                   let file = try? SessionFile.decode(data) {
+                if let file = SessionIO.openSession(at: url) {
                     let missing = appState.restoreSession(file, plot: plotModel)
                     if !missing.isEmpty { presentMissing(missing) }
                 }

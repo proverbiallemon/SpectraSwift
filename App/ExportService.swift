@@ -185,8 +185,15 @@ enum SessionIO {
         panel.allowedContentTypes = [utType]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        do { return try SessionFile.decode(Data(contentsOf: url)) }
-        catch {
+        return openSession(at: url)
+    }
+
+    /// Decode a session file at a known URL, alerting (with the file name)
+    /// on failure. Returns nil after alerting.
+    static func openSession(at url: URL) -> SessionFile? {
+        do {
+            return try SessionFile.decode(Data(contentsOf: url))
+        } catch {
             let alert = NSAlert()
             alert.messageText = "Couldn't open session"
             alert.informativeText = "\(url.lastPathComponent) isn't a readable Spectra DX session: \(error.localizedDescription)"

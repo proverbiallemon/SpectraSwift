@@ -15,8 +15,7 @@ struct SpectraApp: App {
                 .environment(plotModel)
                 .onOpenURL { url in
                     if url.pathExtension == "sdxsession" {
-                        if let data = try? Data(contentsOf: url),
-                           let file = try? SessionFile.decode(data) {
+                        if let file = SessionIO.openSession(at: url) {
                             let missing = appState.restoreSession(file, plot: plotModel)
                             if !missing.isEmpty { presentMissing(missing) }
                         }
