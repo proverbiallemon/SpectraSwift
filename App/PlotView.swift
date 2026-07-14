@@ -11,6 +11,7 @@ struct PlotView: View {
     @State private var scrollMonitor: Any?
     @State private var panStartViewport: PlotViewport?
     @State private var viewFrame: CGRect = .zero
+    @State private var magnifyStartViewport: PlotViewport?
 
     var interactive: Bool = true
 
@@ -47,7 +48,9 @@ struct PlotView: View {
             }
 
             let captured = t
-            DispatchQueue.main.async { lastTransform = captured }
+            if lastTransform != captured {
+                DispatchQueue.main.async { lastTransform = captured }
+            }
         }
         .background(Color(nsColor: .textBackgroundColor))
         .onGeometryChange(for: CGRect.self) { proxy in
@@ -57,6 +60,7 @@ struct PlotView: View {
         .overlay { rubberBand }
         .overlay { crosshairOverlay }
         .gesture(boxZoomOrPan)
+        .simultaneousGesture(pinchZoom)
         .onTapGesture(count: 2) { plot.viewport = nil }   // reset to auto-fit
         .onContinuousHover { phase in
             switch phase {
@@ -148,6 +152,40 @@ struct PlotView: View {
                     })
     }
 
+    private var pinchZoom: some Gesture {
+        MagnifyGesture()
+            .onChanged { g in
+                guard let t = lastTransform else { return }
+                if magnifyStartViewport == nil {
+                    magnifyStartViewport = plot.viewport ?? currentFit()
+                }
+                guard let base = magnifyStartViewport else { return }
+                let p = g.startLocation
+                guard t.plotRect.contains(p) else { return }
+                var fx = (p.x - t.plotRect.minX) / t.plotRect.width
+                if t.xReversed { fx = 1 - fx }
+                let fy = (t.plotRect.maxY - p.y) / t.plotRect.height
+                plot.viewport = base.zoomed(by: Double(g.magnification), aboutX: fx, aboutY: fy)
+            }
+            .onEnded { _ in magnifyStartViewport = nil }
+    }
+
+    /// Nearest visible data point to a view-space location, within a 24pt hit radius.
+    private func nearestPoint(to p: CGPoint, transform t: PlotTransform)
+        -> (point: SpectrumPoint, color: Color)? {
+        let visible = appState.visibleSpectra
+        let sets = plot.pointSets(for: visible, normalize: mustNormalize)
+        var best: (SpectrumPoint, Color, CGFloat)? = nil
+        for (item, pts) in zip(visible, sets) {
+            for pt in pts {
+                let v = t.point(pt)
+                let d = hypot(v.x - p.x, v.y - p.y)
+                if d < (best?.2 ?? 24) { best = (pt, item.color, d) }
+            }
+        }
+        return best.map { ($0.0, $0.1) }
+    }
+
     private func currentFit() -> PlotViewport? {
         let normalize = mustNormalize
         return PlotViewport.fitting(plot.pointSets(for: appState.visibleSpectra, normalize: normalize))
@@ -166,21 +204,30 @@ struct PlotView: View {
 
     @ViewBuilder private var crosshairOverlay: some View {
         if let p = plot.crosshair, let t = lastTransform, t.plotRect.contains(p) {
-            let d = t.dataXY(at: p)
+            let snap = nearestPoint(to: p, transform: t)
+            let markerPoint = snap.map { t.point($0.point) } ?? p
+            let d = snap.map { ($0.point.x, $0.point.y) } ?? t.dataXY(at: p)
             ZStack {
                 Path { path in
-                    path.move(to: CGPoint(x: p.x, y: t.plotRect.minY))
-                    path.addLine(to: CGPoint(x: p.x, y: t.plotRect.maxY))
-                    path.move(to: CGPoint(x: t.plotRect.minX, y: p.y))
-                    path.addLine(to: CGPoint(x: t.plotRect.maxX, y: p.y))
+                    path.move(to: CGPoint(x: markerPoint.x, y: t.plotRect.minY))
+                    path.addLine(to: CGPoint(x: markerPoint.x, y: t.plotRect.maxY))
+                    path.move(to: CGPoint(x: t.plotRect.minX, y: markerPoint.y))
+                    path.addLine(to: CGPoint(x: t.plotRect.maxX, y: markerPoint.y))
                 }
                 .stroke(Color.secondary.opacity(0.5),
                         style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-                Text("\(labelNumber(d.x)), \(String(format: "%.4g", d.y))")
+                if let snap {
+                    Circle()
+                        .fill(snap.color)
+                        .frame(width: 6, height: 6)
+                        .position(markerPoint)
+                }
+                Text("\(labelNumber(d.0)), \(String(format: "%.4g", d.1))")
                     .font(.caption.monospacedDigit())
                     .padding(4)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
-                    .position(x: min(p.x + 60, t.plotRect.maxX - 50), y: max(p.y - 18, 24))
+                    .position(x: min(markerPoint.x + 60, t.plotRect.maxX - 50),
+                              y: max(markerPoint.y - 18, 24))
             }
             .allowsHitTesting(false)
         }

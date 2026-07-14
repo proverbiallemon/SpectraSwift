@@ -41,17 +41,20 @@ struct SpectraApp: App {
                             ExportService.pngData(of: exportPlot, size: exportSize),
                             ext: "png", name: "plot.png")
                     }
+                    .disabled(appState.spectra.isEmpty)
                     Button("Plot as PDF…") {
                         ExportService.exportImage(
                             ExportService.pdfData(of: exportPlot, size: exportSize),
                             ext: "pdf", name: "plot.pdf")
                     }
+                    .disabled(appState.spectra.isEmpty)
                 }
                 Button("Copy Plot") {
                     ExportService.copyToPasteboard(
                         png: ExportService.pngData(of: exportPlot, size: exportSize))
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(appState.spectra.isEmpty)
             }
         }
     }

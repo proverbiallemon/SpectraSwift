@@ -34,8 +34,9 @@ struct ContentView: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            appState.load(urls: urls)
-            return true
+            let fileURLs = urls.filter(\.isFileURL)
+            appState.load(urls: fileURLs)
+            return !fileURLs.isEmpty
         }
         .alert(
             appState.loadErrors.count == 1

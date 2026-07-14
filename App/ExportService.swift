@@ -53,7 +53,8 @@ enum ExportService {
             ctx.endPDFPage()
             ctx.closePDF()
         }
-        return data as Data
+        let result = data as Data
+        return result.isEmpty ? nil : result
     }
 
     static func exportImage(_ data: Data?, ext: String, name: String) {

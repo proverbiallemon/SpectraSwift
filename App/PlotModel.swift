@@ -61,6 +61,8 @@ struct PlotTransform {
     }
 }
 
+extension PlotTransform: Equatable {}
+
 enum IRDisplayMode: String, CaseIterable {
     case native = "As Recorded"
     case transmittance = "Transmittance"
