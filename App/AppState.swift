@@ -31,6 +31,7 @@ final class AppState {
     var statusText: String?   // transient refusals ("no spectrum selected")
     var showResultsTable = false
     var selectedResultIDs: Set<UUID> = []
+    var showSubtractSheet = false
 
     private static let palette: [Color] = [
         .blue, .red, .green, .orange, .purple, .teal, .pink, .indigo, .brown, .mint,
@@ -63,6 +64,14 @@ final class AppState {
                                       reason: error.localizedDescription))
             }
         }
+    }
+
+    func addDerived(_ spectrum: Spectrum) {
+        let color = Self.palette[colorCursor % Self.palette.count]
+        colorCursor += 1
+        let item = LoadedSpectrum(spectrum: spectrum, color: color)
+        spectra.append(item)
+        selectionID = item.id
     }
 
     func remove(_ id: UUID) {

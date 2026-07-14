@@ -56,6 +56,14 @@ struct SpectraApp: App {
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(appState.spectra.isEmpty)
             }
+            CommandMenu("Spectra") {
+                Button("Subtract…") { appState.showSubtractSheet = true }
+                    .disabled(appState.spectra.count < 2)
+            }
+            CommandGroup(after: .toolbar) {
+                Button("Reset View") { plotModel.viewport = nil }
+                    .keyboardShortcut("0", modifiers: .command)
+            }
         }
     }
 

@@ -9,6 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var plot = plotModel
+        @Bindable var state = appState
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
@@ -67,6 +68,7 @@ struct ContentView: View {
             appState.load(urls: fileURLs)
             return !fileURLs.isEmpty
         }
+        .sheet(isPresented: $state.showSubtractSheet) { SubtractSheetView() }
         .alert(
             appState.loadErrors.count == 1
                 ? "Couldn't open \(appState.loadErrors[0].fileName)"

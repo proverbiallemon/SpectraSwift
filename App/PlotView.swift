@@ -2,6 +2,9 @@
 import SwiftUI
 import SpectraKit
 
+/// (original item, spectrum resolved for display, whether it was converted from µm)
+typealias DisplayTrace = (item: LoadedSpectrum, spectrum: Spectrum, converted: Bool)
+
 struct PlotView: View {
     @Environment(AppState.self) private var appState
     @Environment(PlotModel.self) private var plot
@@ -25,28 +28,55 @@ struct PlotView: View {
         return units.count > 1
     }
 
-    /// X axis reversed when every visible spectrum uses a reversed unit.
+    /// What actually draws: µm spectra convert to wavenumber when they
+    /// share the plot with wavenumber spectra.
+    private var displayTraces: [DisplayTrace] {
+        let visible = appState.visibleSpectra
+        let hasWavenumber = visible.contains {
+            if case .wavenumber = $0.spectrum.xUnit { return true }
+            return false
+        }
+        return visible.map { item in
+            if hasWavenumber, case .wavelengthUm = item.spectrum.xUnit,
+               let converted = item.spectrum.convertedToWavenumber() {
+                return (item, converted, true)
+            }
+            return (item, item.spectrum, false)
+        }
+    }
+
+    /// X axis reversed when every visible (resolved) spectrum uses a reversed unit.
     private var xReversed: Bool {
-        let vs = appState.visibleSpectra
-        return !vs.isEmpty && vs.allSatisfy(\.spectrum.xUnit.isConventionallyReversed)
+        let traces = displayTraces
+        return !traces.isEmpty && traces.allSatisfy { $0.spectrum.xUnit.isConventionallyReversed }
     }
 
     var body: some View {
         Canvas { ctx, size in
-            let visible = appState.visibleSpectra
+            let traces = displayTraces
             let normalize = mustNormalize
-            let sets = plot.pointSets(for: visible, normalize: normalize)
-            guard let vp = plot.viewport ?? PlotViewport.fitting(sets) else { return }
+            let sets = plot.pointSets(for: pointSetKeys(traces), normalize: normalize)
+            guard var vp = plot.viewport ?? PlotViewport.fitting(sets) else { return }
+            if plot.autoY, plot.viewport != nil {
+                let visibleYs = sets.flatMap { $0 }
+                    .filter { $0.x >= min(vp.xLo, vp.xHi) && $0.x <= max(vp.xLo, vp.xHi) }
+                    .map(\.y)
+                if let lo = visibleYs.min(), let hi = visibleYs.max(), hi > lo {
+                    let pad = (hi - lo) * 0.05
+                    vp = PlotViewport(xLo: vp.xLo, xHi: vp.xHi,
+                                      yLo: lo - pad, yHi: hi + pad)
+                }
+            }
             let t = PlotTransform(viewport: vp, size: size,
                                   inset: inset, xReversed: xReversed)
 
-            drawAxes(ctx, t, normalize: normalize, visible: visible)
+            drawAxes(ctx, t, normalize: normalize, visible: traces)
             ctx.clip(to: Path(t.plotRect))
-            for (item, pts) in zip(visible, sets) {
-                draw(pts, form: item.spectrum.dataForm,
-                     color: item.color, in: ctx, transform: t)
+            for (trace, pts) in zip(traces, sets) {
+                draw(pts, form: trace.spectrum.dataForm,
+                     color: trace.item.color, in: ctx, transform: t)
             }
-            drawMeasurements(ctx, t, visible: visible)
+            drawMeasurements(ctx, t, visible: appState.visibleSpectra)
 
             let captured = t
             if lastTransform != captured {
@@ -85,9 +115,16 @@ struct PlotView: View {
                 Button {
                     plot.viewport = nil
                 } label: {
-                    Label("Fit", systemImage: "arrow.up.left.and.arrow.down.right")
+                    Label("Reset View", systemImage: "arrow.up.left.and.arrow.down.right")
                 }
+                .labelStyle(.titleAndIcon)
                 .help("Zoom to fit all visible spectra")
+            }
+            ToolbarItem {
+                Toggle(isOn: Bindable(plot).autoY) {
+                    Label("Auto Y", systemImage: "arrow.up.and.down.text.horizontal")
+                }
+                .help("Refit the y-axis to the data in the visible x range")
             }
         }
         .onAppear {
@@ -210,17 +247,23 @@ struct PlotView: View {
             .onEnded { _ in magnifyStartViewport = nil }
     }
 
+    /// Cache keys `pointSets` expects: id plus a tag that changes when the
+    /// resolved spectrum does (µm→wavenumber conversion).
+    private func pointSetKeys(_ traces: [DisplayTrace]) -> [(id: UUID, spectrum: Spectrum, cacheTag: String)] {
+        traces.map { ($0.item.id, $0.spectrum, $0.converted ? "µ" : "") }
+    }
+
     /// Nearest visible data point to a view-space location, within a 24pt hit radius.
     private func nearestPoint(to p: CGPoint, transform t: PlotTransform)
         -> (point: SpectrumPoint, color: Color)? {
-        let visible = appState.visibleSpectra
-        let sets = plot.pointSets(for: visible, normalize: mustNormalize)
+        let traces = displayTraces
+        let sets = plot.pointSets(for: pointSetKeys(traces), normalize: mustNormalize)
         var best: (SpectrumPoint, Color, CGFloat)? = nil
-        for (item, pts) in zip(visible, sets) {
+        for (trace, pts) in zip(traces, sets) {
             for pt in pts {
                 let v = t.point(pt)
                 let d = hypot(v.x - p.x, v.y - p.y)
-                if d < (best?.2 ?? 24) { best = (pt, item.color, d) }
+                if d < (best?.2 ?? 24) { best = (pt, trace.item.color, d) }
             }
         }
         return best.map { ($0.0, $0.1) }
@@ -228,7 +271,7 @@ struct PlotView: View {
 
     private func currentFit() -> PlotViewport? {
         let normalize = mustNormalize
-        return PlotViewport.fitting(plot.pointSets(for: appState.visibleSpectra, normalize: normalize))
+        return PlotViewport.fitting(plot.pointSets(for: pointSetKeys(displayTraces), normalize: normalize))
     }
 
     @ViewBuilder private var statusCapsule: some View {
@@ -362,7 +405,7 @@ struct PlotView: View {
     }
 
     private func drawAxes(_ ctx: GraphicsContext, _ t: PlotTransform,
-                          normalize: Bool, visible: [LoadedSpectrum]) {
+                          normalize: Bool, visible: [DisplayTrace]) {
         let r = t.plotRect
         ctx.stroke(Path(r), with: .color(.secondary.opacity(0.6)), lineWidth: 1)
 
@@ -403,12 +446,14 @@ struct PlotView: View {
     }
 
     @ViewBuilder private var legend: some View {
-        if appState.visibleSpectra.count > 1 {
+        let traces = displayTraces
+        if traces.count > 1 {
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(appState.visibleSpectra) { item in
+                ForEach(traces, id: \.item.id) { item, spectrum, converted in
                     HStack(spacing: 5) {
                         Rectangle().fill(item.color).frame(width: 14, height: 3)
-                        Text(item.spectrum.title).font(.caption).lineLimit(1)
+                        Text(spectrum.title + (converted ? " (from µm)" : ""))
+                            .font(.caption).lineLimit(1)
                     }
                 }
             }

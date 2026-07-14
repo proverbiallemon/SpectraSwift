@@ -81,6 +81,9 @@ final class PlotModel {
     var viewport: PlotViewport?
     var displayMode: IRDisplayMode = .native
     var crosshair: CGPoint?   // view coords, set by hover in Task 9
+    /// When true (and a manual viewport is set), the y-axis refits to the
+    /// data visible in the current x range instead of holding a fixed range.
+    var autoY: Bool = false
 
     var mode: PlotMode = .explore {
         didSet { if mode != .integrate { pendingX1 = nil } }
@@ -126,17 +129,20 @@ final class PlotModel {
     private var cacheKey: String = ""
 
     /// Cached effectivePoints, invalidated when displayMode/normalize or the
-    /// visible spectrum set changes.
-    func pointSets(for items: [LoadedSpectrum], normalize: Bool) -> [[SpectrumPoint]] {
-        let key = "\(displayMode.rawValue)|\(normalize)|" + items.map { $0.id.uuidString }.joined(separator: ",")
+    /// resolved trace set changes. `cacheTag` lets callers distinguish
+    /// derived spectra (e.g. µm→wavenumber conversions) from their raw form.
+    func pointSets(for traces: [(id: UUID, spectrum: Spectrum, cacheTag: String)],
+                   normalize: Bool) -> [[SpectrumPoint]] {
+        let key = "\(displayMode.rawValue)|\(normalize)|" +
+            traces.map { "\($0.id.uuidString)\($0.cacheTag)" }.joined(separator: ",")
         if key != cacheKey {
             cacheKey = key
             cachedSets = [:]
-            for item in items {
-                cachedSets[item.id] = effectivePoints(for: item.spectrum, normalize: normalize)
+            for t in traces {
+                cachedSets[t.id] = effectivePoints(for: t.spectrum, normalize: normalize)
             }
         }
-        return items.compactMap { cachedSets[$0.id] }
+        return traces.compactMap { cachedSets[$0.id] }
     }
 }
 
