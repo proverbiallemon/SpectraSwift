@@ -69,12 +69,30 @@ enum IRDisplayMode: String, CaseIterable {
     case absorbance = "Absorbance"
 }
 
+enum PlotMode: String, CaseIterable {
+    case explore = "Explore"
+    case pickPeaks = "Pick Peaks"
+    case integrate = "Integrate"
+}
+
 @MainActor @Observable
 final class PlotModel {
     /// nil means auto-fit to visible spectra.
     var viewport: PlotViewport?
     var displayMode: IRDisplayMode = .native
     var crosshair: CGPoint?   // view coords, set by hover in Task 9
+
+    var mode: PlotMode = .explore {
+        didSet { if mode != .integrate { pendingX1 = nil } }
+    }
+    /// First click of an in-progress integration region.
+    var pendingX1: Double?
+
+    /// Chemists' peaks point down in transmittance display.
+    func peakDirection(for effectiveUnit: YUnit) -> PeakDirection {
+        if case .transmittance = effectiveUnit { return .minima }
+        return .maxima
+    }
 
     /// Points after T↔A conversion and (if mixed y-units) 0-1 normalization.
     func effectivePoints(for s: Spectrum, normalize: Bool) -> [SpectrumPoint] {

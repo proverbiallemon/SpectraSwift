@@ -46,6 +46,7 @@ struct PlotView: View {
                 draw(pts, form: item.spectrum.dataForm,
                      color: item.color, in: ctx, transform: t)
             }
+            drawMeasurements(ctx, t, visible: visible)
 
             let captured = t
             if lastTransform != captured {
@@ -59,6 +60,8 @@ struct PlotView: View {
         .overlay(alignment: .topTrailing) { legend }
         .overlay { rubberBand }
         .overlay { crosshairOverlay }
+        .overlay(alignment: .bottom) { statusCapsule }
+        .gesture(measurementTap, including: plot.mode == .explore ? .subviews : .all)
         .gesture(boxZoomOrPan)
         .simultaneousGesture(pinchZoom)
         .onTapGesture(count: 2) { plot.viewport = nil }   // reset to auto-fit
@@ -113,13 +116,49 @@ struct PlotView: View {
         .onDisappear {
             if let m = scrollMonitor { NSEvent.removeMonitor(m) }
         }
+        .background {
+            // SwiftUI's onKeyPress + .focusable() can't reliably reclaim
+            // first-responder status from a toolbar control (segmented
+            // picker, button) on macOS, so Escape would silently no-op
+            // after using the mode picker. A hidden keyboardShortcut button
+            // uses the same window-wide key-equivalent dispatch that makes
+            // menu shortcuts (e.g. Cmd-O) work regardless of what has focus.
+            Button("") {
+                if plot.pendingX1 != nil { plot.pendingX1 = nil }
+                else if plot.mode != .explore { plot.mode = .explore }
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .opacity(0)
+        }
+    }
+
+    private var measurementTap: some Gesture {
+        SpatialTapGesture()
+            .onEnded { g in
+                guard plot.mode != .explore, let t = lastTransform,
+                      t.plotRect.contains(g.location) else { return }
+                let d = t.dataXY(at: g.location)
+                switch plot.mode {
+                case .pickPeaks:
+                    appState.addPeak(at: d.x, plot: plot)
+                case .integrate:
+                    if let x1 = plot.pendingX1 {
+                        appState.addRegion(x1: x1, x2: d.x, plot: plot)
+                        plot.pendingX1 = nil
+                    } else {
+                        plot.pendingX1 = d.x
+                    }
+                case .explore:
+                    break
+                }
+            }
     }
 
     private var boxZoomOrPan: some Gesture {
         DragGesture(minimumDistance: 4)
             .modifiers(.option)
             .onChanged { g in
-                guard let t = lastTransform else { return }
+                guard plot.mode == .explore, let t = lastTransform else { return }
                 if panStartViewport == nil {
                     panStartViewport = plot.viewport ?? currentFit()
                 }
@@ -129,10 +168,11 @@ struct PlotView: View {
                 let dyFrac = Double(g.translation.height) / t.plotRect.height
                 plot.viewport = base.panned(fractionX: dxFrac, fractionY: dyFrac)
             }
-            .onEnded { _ in panStartViewport = nil }
+            .onEnded { _ in guard plot.mode == .explore else { return }; panStartViewport = nil }
             .exclusively(before:
                 DragGesture(minimumDistance: 4)
                     .onChanged { g in
+                        guard plot.mode == .explore else { return }
                         dragRect = CGRect(
                             x: min(g.startLocation.x, g.location.x),
                             y: min(g.startLocation.y, g.location.y),
@@ -141,7 +181,7 @@ struct PlotView: View {
                     }
                     .onEnded { g in
                         defer { dragRect = nil }
-                        guard let t = lastTransform,
+                        guard plot.mode == .explore, let t = lastTransform,
                               let rect = dragRect,
                               rect.width > 8, rect.height > 8 else { return }
                         let a = t.dataXY(at: CGPoint(x: rect.minX, y: rect.maxY))
@@ -189,6 +229,20 @@ struct PlotView: View {
     private func currentFit() -> PlotViewport? {
         let normalize = mustNormalize
         return PlotViewport.fitting(plot.pointSets(for: appState.visibleSpectra, normalize: normalize))
+    }
+
+    @ViewBuilder private var statusCapsule: some View {
+        if let status = appState.statusText {
+            Text(status)
+                .font(.callout)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.thinMaterial, in: Capsule())
+                .padding(.bottom, 46)
+                .task {
+                    try? await Task.sleep(for: .seconds(2.5))
+                    appState.statusText = nil
+                }
+        }
     }
 
     @ViewBuilder private var rubberBand: some View {
@@ -251,6 +305,51 @@ struct PlotView: View {
                 path.addLine(to: top)
             }
             ctx.stroke(path, with: .color(color), lineWidth: 1.5)
+        }
+    }
+
+    private func drawMeasurements(_ ctx: GraphicsContext, _ t: PlotTransform,
+                                  visible: [LoadedSpectrum]) {
+        guard !mustNormalize else { return }
+        let visibleIDs = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0.color) })
+        for mark in appState.peaks
+        where mark.displayMode == plot.displayMode.rawValue {
+            guard let color = visibleIDs[mark.spectrumID] else { continue }
+            let v = t.point(SpectrumPoint(x: mark.x, y: mark.y))
+            let r = CGRect(x: v.x - 4, y: v.y - 4, width: 8, height: 8)
+            ctx.fill(Path(ellipseIn: r), with: .color(color))
+            ctx.stroke(Path(ellipseIn: r.insetBy(dx: -2, dy: -2)),
+                       with: .color(color.opacity(0.5)), lineWidth: 1)
+        }
+        for region in appState.regions
+        where region.displayMode == plot.displayMode.rawValue {
+            guard let color = visibleIDs[region.spectrumID],
+                  let item = visible.first(where: { $0.id == region.spectrumID })
+            else { continue }
+            let pts = plot.effectivePoints(for: item.spectrum, normalize: false)
+                .filter { $0.x >= region.x1 && $0.x <= region.x2 }
+                .sorted { $0.x < $1.x }
+            guard pts.count >= 2 else { continue }
+            var path = Path()
+            path.move(to: t.point(pts[0]))
+            for p in pts.dropFirst() { path.addLine(to: t.point(p)) }
+            path.addLine(to: t.point(pts[pts.count - 1]))
+            path.closeSubpath()
+            ctx.fill(path, with: .color(color.opacity(0.18)))
+            var chord = Path()
+            chord.move(to: t.point(pts[0]))
+            chord.addLine(to: t.point(pts[pts.count - 1]))
+            ctx.stroke(chord, with: .color(color.opacity(0.7)),
+                       style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
+        // Pending first integration click: vertical guide line.
+        if plot.mode == .integrate, let x1 = plot.pendingX1 {
+            let vx = t.point(SpectrumPoint(x: x1, y: t.viewport.yLo)).x
+            var guide = Path()
+            guide.move(to: CGPoint(x: vx, y: t.plotRect.minY))
+            guide.addLine(to: CGPoint(x: vx, y: t.plotRect.maxY))
+            ctx.stroke(guide, with: .color(.secondary),
+                       style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
         }
     }
 

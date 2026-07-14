@@ -26,6 +26,9 @@ final class AppState {
     var spectra: [LoadedSpectrum] = []
     var selectionID: UUID?
     var loadErrors: [LoadError] = []
+    var peaks: [PeakMark] = []
+    var regions: [IntegrationRegion] = []
+    var statusText: String?   // transient refusals ("no spectrum selected")
 
     private static let palette: [Color] = [
         .blue, .red, .green, .orange, .purple, .teal, .pink, .indigo, .brown, .mint,
@@ -62,7 +65,98 @@ final class AppState {
 
     func remove(_ id: UUID) {
         spectra.removeAll { $0.id == id }
+        peaks.removeAll { $0.spectrumID == id }
+        regions.removeAll { $0.spectrumID == id }
         if selectionID == id { selectionID = spectra.first?.id }
+    }
+
+    /// The spectrum measurements apply to: explicit selection, else the
+    /// only visible spectrum.
+    var measurementTarget: LoadedSpectrum? {
+        if let sel = selected, sel.isVisible { return sel }
+        let vis = visibleSpectra
+        return vis.count == 1 ? vis.first : nil
+    }
+
+    @discardableResult
+    private func requireTarget() -> LoadedSpectrum? {
+        guard let t = measurementTarget else {
+            statusText = "Select a spectrum to measure"
+            NSSound.beep()
+            return nil
+        }
+        return t
+    }
+
+    func addPeak(at dataX: Double, plot: PlotModel) {
+        guard let target = requireTarget() else { return }
+        let pts = plot.effectivePoints(for: target.spectrum, normalize: false)
+        let unit = plot.effectiveYUnit(for: target.spectrum)
+        guard let apex = Measure.nearestPeak(
+            in: pts, nearX: dataX,
+            direction: plot.peakDirection(for: unit)) else {
+            statusText = "No peak near that position"
+            NSSound.beep()
+            return
+        }
+        let mark = PeakMark(spectrumID: target.id, x: apex.x, y: apex.y,
+                            height: baselineHeight(forPeakAt: apex.x, in: target,
+                                                   points: pts, plot: plot),
+                            displayMode: plot.displayMode.rawValue)
+        guard !peaks.contains(where: {
+            $0.spectrumID == mark.spectrumID && $0.x == mark.x
+                && $0.displayMode == mark.displayMode }) else { return }
+        peaks.append(mark)
+    }
+
+    /// Baseline rule: a peak inside an existing integration region (same
+    /// spectrum, same display mode) measures its height against that
+    /// region's chord. No region → no baseline → height is nil and the
+    /// table simply omits it.
+    private func baselineHeight(forPeakAt peakX: Double, in target: LoadedSpectrum,
+                                points: [SpectrumPoint], plot: PlotModel) -> Double? {
+        guard let region = regions.first(where: {
+            $0.spectrumID == target.id
+                && $0.displayMode == plot.displayMode.rawValue
+                && (min($0.x1, $0.x2)...max($0.x1, $0.x2)).contains(peakX)
+        }) else { return nil }
+        return Measure.chordBaselineHeight(points: points, peakX: peakX,
+                                           x1: region.x1, x2: region.x2)
+    }
+
+    func addRegion(x1: Double, x2: Double, plot: PlotModel) {
+        guard let target = requireTarget() else { return }
+        let pts = plot.effectivePoints(for: target.spectrum, normalize: false)
+        do {
+            let area = try Measure.integrate(points: pts, from: x1, to: x2)
+            regions.append(IntegrationRegion(
+                spectrumID: target.id, x1: x1, x2: x2, area: area,
+                displayMode: plot.displayMode.rawValue))
+        } catch {
+            statusText = "That range contains no data to integrate"
+            NSSound.beep()
+        }
+    }
+
+    func autoDetectPeaks(plot: PlotModel) {
+        guard let target = requireTarget() else { return }
+        let pts = plot.effectivePoints(for: target.spectrum, normalize: false)
+        let unit = plot.effectiveYUnit(for: target.spectrum)
+        let found = Measure.detectPeaks(
+            in: pts, direction: plot.peakDirection(for: unit), minProminence: nil)
+        // Replace prior auto-detected marks for this spectrum in this mode;
+        // manual picks are indistinguishable, so the honest rule is:
+        // deduplicate by (spectrum, x, mode) and add what's new.
+        for apex in found {
+            let mark = PeakMark(spectrumID: target.id, x: apex.x, y: apex.y,
+                                height: nil, displayMode: plot.displayMode.rawValue)
+            if !peaks.contains(where: {
+                $0.spectrumID == mark.spectrumID && $0.x == mark.x
+                    && $0.displayMode == mark.displayMode }) {
+                peaks.append(mark)
+            }
+        }
+        statusText = found.isEmpty ? "No peaks found" : nil
     }
 
     private func describe(_ e: SpectrumFileError) -> String {

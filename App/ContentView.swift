@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showInspector = true
 
     var body: some View {
+        @Bindable var plot = plotModel
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
@@ -25,6 +26,18 @@ struct ContentView: View {
                             .inspectorColumnWidth(min: 220, ideal: 280)
                     }
                     .toolbar {
+                        ToolbarItem {
+                            Picker("Mode", selection: $plot.mode) {
+                                ForEach(PlotMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .help("Explore pans and zooms; Pick Peaks and Integrate turn clicks into measurements")
+                        }
+                        ToolbarItem {
+                            Button("Find Peaks") { appState.autoDetectPeaks(plot: plotModel) }
+                                .disabled(plotModel.mode != .pickPeaks)
+                                .help("Automatically find peaks in the selected spectrum")
+                        }
                         ToolbarItem {
                             Button { showInspector.toggle() } label: {
                                 Label("Inspector", systemImage: "sidebar.right")
