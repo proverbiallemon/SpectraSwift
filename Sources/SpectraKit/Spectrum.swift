@@ -99,4 +99,19 @@ public struct Spectrum: Sendable, Identifiable {
         guard let lo = points.map(\.y).min(), let hi = points.map(\.y).max() else { return nil }
         return lo...hi
     }
+
+    /// Wavelength-in-µm → wavenumber (cm⁻¹): x' = 10000/x. Non-µm spectra
+    /// return nil. Non-positive x values cannot convert and are dropped.
+    public func convertedToWavenumber() -> Spectrum? {
+        guard case .wavelengthUm = xUnit else { return nil }
+        let converted = points
+            .filter { $0.x > 0 }
+            .map { SpectrumPoint(x: 10000 / $0.x, y: $0.y) }
+            .sorted { $0.x < $1.x }
+        var copy = self
+        copy.points = converted
+        copy.xUnit = .wavenumber
+        copy.warnings = warnings + [SpectrumWarning("x-axis converted from µm to cm⁻¹")]
+        return copy
+    }
 }

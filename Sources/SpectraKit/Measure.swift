@@ -123,4 +123,33 @@ public enum Measure {
         let chordArea = (hi - lo) * (yLo + yHi) / 2
         return curveArea - chordArea
     }
+
+    /// A − B: b linearly interpolated onto a's grid over the overlapping
+    /// x-range. Result inherits a's units and form.
+    public static func subtract(_ a: Spectrum, minus b: Spectrum) throws -> Spectrum {
+        let aPts = a.points.sorted { $0.x < $1.x }
+        let bPts = b.points.sorted { $0.x < $1.x }
+        guard let aLo = aPts.first?.x, let aHi = aPts.last?.x,
+              let bLo = bPts.first?.x, let bHi = bPts.last?.x,
+              max(aLo, bLo) < min(aHi, bHi) else {
+            throw MeasureError.noOverlap
+        }
+        let lo = max(aLo, bLo), hi = min(aHi, bHi)
+        var pts: [SpectrumPoint] = []
+        for p in aPts where p.x >= lo && p.x <= hi {
+            if let by = interpolatedY(in: bPts, at: p.x) {
+                pts.append(SpectrumPoint(x: p.x, y: p.y - by))
+            }
+        }
+        var warnings: [SpectrumWarning] = []
+        if lo > aLo || hi < aHi {
+            warnings.append(SpectrumWarning(
+                "Subtraction limited to the overlap \(lo)–\(hi); points outside it were dropped"))
+        }
+        return Spectrum(
+            title: "\(a.title) − \(b.title)",
+            origin: a.origin, owner: a.owner, sourceURL: nil,
+            xUnit: a.xUnit, yUnit: a.yUnit, dataForm: a.dataForm,
+            points: pts, parameters: [], warnings: warnings)
+    }
 }
