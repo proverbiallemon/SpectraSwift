@@ -7,11 +7,19 @@ public struct PeakMark: Sendable, Codable, Equatable, Identifiable {
     public var y: Double
     public var height: Double?
     public var displayMode: String
+    /// Optional user-entered label; nil or empty means "use the default".
+    public var label: String?
+
+    /// What the plot and exports actually display.
+    public var effectiveLabel: String {
+        if let label, !label.isEmpty { return label }
+        return String(format: "%.6g", x)
+    }
 
     public init(id: UUID = UUID(), spectrumID: UUID, x: Double, y: Double,
-                height: Double?, displayMode: String) {
+                height: Double?, displayMode: String, label: String? = nil) {
         self.id = id; self.spectrumID = spectrumID; self.x = x; self.y = y
-        self.height = height; self.displayMode = displayMode
+        self.height = height; self.displayMode = displayMode; self.label = label
     }
 }
 
