@@ -66,3 +66,146 @@ private struct GroundTruth: Decodable {
         _ = try OPUSReader.read(data: Data("##TITLE=nope".utf8), sourceURL: nil)
     }
 }
+
+// MARK: - Y-unit discrimination (PLF), DPF, DXU, warning caps
+
+/// The fixtures all carry PLF=AB in their sample Acquisition block, so they
+/// must report absorbance with no "assumed" fallback warning.
+@Test func fixturesAreAbsorbanceWithoutAssumedWarning() throws {
+    for name in ["brukeropus-example-file.0",
+                 "opusreader2-629266_1TP_A-1_C1.0",
+                 "opusreader2-617262_1TP_C-1_A5.0"] {
+        let s = try #require(
+            OPUSReader.read(data: fixtureData(name), sourceURL: nil).first, "\(name)")
+        #expect(s.yUnit == .absorbance, "\(name)")
+        #expect(!s.warnings.contains { $0.message.contains("assumed to be absorbance") },
+                "\(name)")
+    }
+}
+
+@Test func syntheticPLFTransmittanceIsTransmittance() throws {
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "TR"), sourceURL: nil).first)
+    #expect(s.yUnit == .transmittance)
+    #expect(!s.warnings.contains { $0.message.contains("assumed to be absorbance") })
+    #expect(s.points.count == 4)
+    #expect(abs(s.points[0].y - 0.1) < 1e-7)
+}
+
+@Test func syntheticMissingPLFAssumesAbsorbanceWithWarning() throws {
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: nil), sourceURL: nil).first)
+    #expect(s.yUnit == .absorbance)
+    #expect(s.warnings.contains { $0.message.contains("assumed to be absorbance") })
+}
+
+@Test func unsupportedDPFWarnsAndStillReadsFloat32() throws {
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", dpf: 2), sourceURL: nil).first)
+    #expect(s.warnings.contains { $0.message.contains("DPF") })
+    #expect(s.points.count == 4)
+}
+
+@Test func unrecognizedOrMissingXUnitWarns() throws {
+    let odd = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", dxu: "XX"), sourceURL: nil).first)
+    #expect(odd.xUnit == .other("XX"))
+    #expect(odd.warnings.contains { $0.message.contains("x-unit") })
+
+    let missing = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", dxu: nil), sourceURL: nil).first)
+    #expect(missing.xUnit == .other("unknown"))
+    #expect(missing.warnings.contains { $0.message.contains("x-unit") })
+}
+
+@Test func directoryOutOfBoundsWarningsAreCapped() throws {
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", extraOutOfBoundsEntries: 6),
+                        sourceURL: nil).first)
+    let oob = s.warnings.filter { $0.message.contains("out of bounds") }
+    #expect(oob.count == 4)   // 3 individual + 1 summary
+    #expect(oob.contains { $0.message.contains("more") })
+}
+
+// MARK: - Synthetic OPUS blob builder
+
+private func le16(_ v: UInt16) -> Data { Data([UInt8(v & 0xFF), UInt8(v >> 8)]) }
+private func le32(_ v: UInt32) -> Data {
+    Data([UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8((v >> 16) & 0xFF), UInt8(v >> 24)])
+}
+private func le64(_ v: UInt64) -> Data {
+    var d = Data(); for i in 0..<8 { d.append(UInt8((v >> (8 * UInt64(i))) & 0xFF)) }
+    return d
+}
+
+/// One tag/type/size/value parameter record. `value.count` must be even.
+private func record(_ tag: String, type: UInt16, value: Data) -> Data {
+    var d = Data(tag.utf8)   // exactly 3 ASCII chars
+    d.append(0)
+    d += le16(type)
+    d += le16(UInt16(value.count / 2))
+    d += value
+    return d
+}
+
+private func paddedToWord(_ d: Data) -> Data {
+    var d = d
+    while d.count % 4 != 0 { d.append(0) }
+    return d
+}
+
+private func dirEntry(dataType: UInt8, channelType: UInt8,
+                      offset: Int, byteCount: Int) -> Data {
+    var d = Data([dataType, channelType, 0, 0])
+    d += le32(UInt32(byteCount / 4))
+    d += le32(UInt32(offset))
+    return d
+}
+
+/// A minimal, structurally valid OPUS file: header, directory, AB data-status
+/// parameter block, sample Acquisition block, and an AB data block of 4 floats.
+private func makeOPUSBlob(plf: String?, dxu: String? = "WN",
+                          dpf: Int32? = nil,
+                          extraOutOfBoundsEntries: Int = 0) -> Data {
+    var status = Data()
+    if let dpf { status += record("DPF", type: 0, value: le32(UInt32(bitPattern: dpf))) }
+    status += record("NPT", type: 0, value: le32(4))
+    status += record("FXV", type: 1, value: le64(Double(4000).bitPattern))
+    status += record("LXV", type: 1, value: le64(Double(1000).bitPattern))
+    status += record("CSF", type: 1, value: le64(Double(1).bitPattern))
+    if let dxu { status += record("DXU", type: 2, value: Data(dxu.utf8)) }
+    status += record("END", type: 0, value: Data())
+    let statusBlock = paddedToWord(status)
+
+    var acq = Data()
+    if let plf { acq += record("PLF", type: 2, value: Data(plf.utf8)) }
+    acq += record("END", type: 0, value: Data())
+    let acqBlock = paddedToWord(acq)
+
+    var ab = Data()
+    for f: Float in [0.1, 0.2, 0.3, 0.4] { ab += le32(f.bitPattern) }
+
+    let entryCount = 4 + extraOutOfBoundsEntries
+    let payloadStart = 24 + entryCount * 12
+    let statusOffset = payloadStart
+    let acqOffset = statusOffset + statusBlock.count
+    let abOffset = acqOffset + acqBlock.count
+
+    var blob = Data([0x0A, 0x0A, 0xFE, 0xFE])   // magic
+    blob += le64(0)                             // version (double), unused
+    blob += le32(24)                            // directory start
+    blob += le32(UInt32(entryCount))            // max blocks
+    blob += le32(UInt32(entryCount))            // used blocks
+    blob += dirEntry(dataType: 31, channelType: 16, offset: statusOffset,
+                     byteCount: statusBlock.count)
+    blob += dirEntry(dataType: 48, channelType: 0, offset: acqOffset,
+                     byteCount: acqBlock.count)
+    for _ in 0..<extraOutOfBoundsEntries {      // entries pointing past EOF
+        blob += dirEntry(dataType: 7, channelType: 4, offset: 1_000_000, byteCount: 4)
+    }
+    blob += dirEntry(dataType: 15, channelType: 16, offset: abOffset,
+                     byteCount: ab.count)
+    blob += dirEntry(dataType: 0, channelType: 0, offset: 0, byteCount: 0)  // stop
+    blob += statusBlock + acqBlock + ab
+    return blob
+}

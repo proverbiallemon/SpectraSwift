@@ -129,7 +129,7 @@ public enum OPUSReader {
         // hardcoded 24; every real file agrees but the field is authoritative.
         let dirStart = readUInt32(data, at: 12).map(Int.init) ?? headerLength
         var cursor = (dirStart > 0 && dirStart <= directoryLimit) ? dirStart : headerLength
-        var sawOutOfBounds = false
+        var outOfBoundsCount = 0
 
         while cursor + entrySize <= directoryLimit && cursor + entrySize <= data.count {
             guard let dataType = readUInt8(data, at: cursor),
@@ -145,10 +145,13 @@ public enum OPUSReader {
             // 64-bit but guard the byte extent against the file length.
             let byteCount = Int(chunkWords) * 4
             if offset + byteCount > data.count {
-                // Truncated or corrupt entry: record it, keep scanning others.
-                sawOutOfBounds = true
-                warnings.append(SpectrumWarning(
-                    "Directory entry out of bounds (offset \(offset), \(byteCount) bytes), skipped"))
+                // Truncated or corrupt entry: record it (capped at 3 plus a
+                // summary, the JCAMPReader idiom), keep scanning others.
+                outOfBoundsCount += 1
+                if outOfBoundsCount <= 3 {
+                    warnings.append(SpectrumWarning(
+                        "Directory entry out of bounds (offset \(offset), \(byteCount) bytes), skipped"))
+                }
                 cursor += entrySize
                 continue
             }
@@ -163,10 +166,14 @@ public enum OPUSReader {
             cursor += entrySize
         }
 
+        if outOfBoundsCount > 3 {
+            warnings.append(SpectrumWarning(
+                "\(outOfBoundsCount - 3) more directory entries out of bounds, skipped"))
+        }
         if blocks.isEmpty {
             throw OPUSError.malformed(
-                sawOutOfBounds ? "All directory entries out of bounds"
-                               : "No readable directory entries")
+                outOfBoundsCount > 0 ? "All directory entries out of bounds"
+                                     : "No readable directory entries")
         }
         return blocks
     }
@@ -314,6 +321,13 @@ public enum OPUSReader {
             throw OPUSError.malformed("AB data-status block missing FXV/LXV")
         }
 
+        // DPF (Data Point Format): 1 = float32, 2 = int32. Only float32 is
+        // implemented; a different DPF must never be read silently as floats.
+        if let dpf = status["DPF"]?.intValue, dpf != 1 {
+            warnings.append(SpectrumWarning(
+                "Unsupported OPUS data point format (DPF=\(dpf)); values read as float32"))
+        }
+
         // Y values: float32 LE array in the data block. Read exactly NPT values
         // when the block holds at least that many; only warn+truncate when the
         // block holds FEWER than NPT. Never read past the block.
@@ -349,6 +363,23 @@ public enum OPUSReader {
 
         let dxu = status["DXU"]?.stringValue ?? ""
         let xUnit = xUnit(from: dxu, warnings: &warnings)
+
+        // Y-unit: PLF ("Result Spectrum") in the sample Acquisition block names
+        // the stored result kind (AB = absorbance, TR = transmittance). Only
+        // the sample block counts; the "Acquisition (Rf)" twin describes the
+        // reference channel and can legitimately disagree (e.g. TR while the
+        // result is AB). Anything else falls back to absorbance with a warning
+        // so the assumption is never silent.
+        let plf = (allParams.first { $0.0 == "Acquisition" }?.1["PLF"]?.stringValue)?
+            .trimmingCharacters(in: .whitespaces).uppercased()
+        let yUnit: YUnit
+        switch plf {
+        case "AB": yUnit = .absorbance
+        case "TR": yUnit = .transmittance
+        default:
+            yUnit = .absorbance
+            warnings.append(SpectrumWarning("OPUS result block assumed to be absorbance"))
+        }
 
         // Collect parameters. Blocks are visited in file (directory) order, in
         // which the sample/primary channel precedes its reference (Rf) twin.
@@ -393,7 +424,7 @@ public enum OPUSReader {
             owner: "",
             sourceURL: sourceURL,
             xUnit: xUnit,
-            yUnit: .absorbance,
+            yUnit: yUnit,
             dataForm: .continuous,
             points: points,
             parameters: parameters,
@@ -404,7 +435,9 @@ public enum OPUSReader {
         switch dxu.uppercased() {
         case "WN": return .wavenumber
         case "MI": return .wavelengthUm
-        case "": return .other("X")
+        case "":
+            warnings.append(SpectrumWarning("OPUS x-unit (DXU) missing"))
+            return .other("unknown")
         default:
             warnings.append(SpectrumWarning("Unrecognized OPUS x-unit '\(dxu)'"))
             return .other(dxu)
