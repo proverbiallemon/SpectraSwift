@@ -18,7 +18,6 @@ public enum OPUSError: Error, Equatable {
 public enum OPUSReader {
     static let magic: [UInt8] = [0x0A, 0x0A, 0xFE, 0xFE]
     static let headerLength = 24
-    static let directoryLimit = 504    // HEADER_LEN: entries live in the first 504 bytes.
     static let entrySize = 12
 
     /// Block type codes (the `dataType` byte of a directory entry).
@@ -104,9 +103,8 @@ public enum OPUSReader {
             }
             let spectrum = try assemble(
                 data: data, abBlock: ab, status: status,
-                allParams: blocks.indices.compactMap { i in
-                    paramBlocks[i].map { (blocks[i].name, $0) }
-                },
+                allParams: orderedParamBlocks(paramBlocks: paramBlocks,
+                                              blocks: blocks, statusIndex: statusIndex),
                 sourceURL: sourceURL, sharedWarnings: warnings)
             spectra.append(spectrum)
         }
@@ -136,19 +134,37 @@ public enum OPUSReader {
 
     // MARK: - Directory
 
-    /// Walk the 12-byte directory entries from byte 24. Stops at the 504-byte
-    /// limit, an offset of 0, or the first entry that runs past the file. An
-    /// entry whose payload is out of bounds is skipped with a warning; if NO
-    /// valid block is ever found the file is malformed.
+    /// Walk the 12-byte directory entries starting at the header's
+    /// directory_start field (int32 LE at byte 12). Real files place the
+    /// directory anywhere in the file (NIST ATR files use offset 8536), so honor
+    /// that field wherever it points rather than assuming the first 504 bytes.
+    /// The scan is bounded three ways so a corrupt file can never loop unbounded
+    /// or read past EOF: the header's max_blocks count (int32 LE at byte 16,
+    /// clamped to what the file can physically hold), the file length, and a
+    /// zero offset. An entry whose payload is out of bounds is skipped with a
+    /// capped warning; if NO valid block is ever found the file is malformed.
     static func parseDirectory(_ data: Data, warnings: inout [SpectrumWarning]) throws -> [Block] {
-        var blocks: [Block] = []
-        // Prefer the directory_start field (int32 LE at byte 12) over the
-        // hardcoded 24; every real file agrees but the field is authoritative.
-        let dirStart = readUInt32(data, at: 12).map(Int.init) ?? headerLength
-        var cursor = (dirStart > 0 && dirStart <= directoryLimit) ? dirStart : headerLength
-        var outOfBoundsCount = 0
+        // directory_start is authoritative but must land inside the file. A
+        // value below the header or at/beyond EOF is a malformed file, not a
+        // reason to guess an offset.
+        guard let dirStart = readUInt32(data, at: 12).map(Int.init),
+              dirStart >= headerLength, dirStart < data.count else {
+            throw OPUSError.malformed("OPUS directory start is out of range")
+        }
+        // max_blocks caps the entry count; clamp it to the number of entries the
+        // file could physically hold, and fall back to that cap when the field
+        // is absent or implausible so the scan is always finite.
+        let maxByFile = (data.count - dirStart) / entrySize
+        let maxBlocks = readUInt32(data, at: 16).map(Int.init) ?? 0
+        let entryCap = (maxBlocks > 0 && maxBlocks <= maxByFile) ? maxBlocks : maxByFile
 
-        while cursor + entrySize <= directoryLimit && cursor + entrySize <= data.count {
+        var blocks: [Block] = []
+        var cursor = dirStart
+        var outOfBoundsCount = 0
+        var scanned = 0
+
+        while scanned < entryCap && cursor + entrySize <= data.count {
+            scanned += 1
             guard let dataType = readUInt8(data, at: cursor),
                   let channelType = readUInt8(data, at: cursor + 1),
                   let textType = readUInt8(data, at: cursor + 2),
@@ -257,6 +273,34 @@ public enum OPUSReader {
         return statusIndices.min(by: {
             abs(blocks[$0].offset - ab.offset) < abs(blocks[$1].offset - ab.offset)
         })
+    }
+
+    /// Blocks whose parameters should get bare-key priority right after the
+    /// spectrum's own paired data-status block: the sample/instrument/acquisition
+    /// context that describes the displayed result.
+    static let priorityBlockNames: Set<String> = [
+        "Sample", "Instrument", "Instrument (Rf)",
+        "Acquisition", "Acquisition (Rf)"]
+
+    /// Orders parameter blocks so the AB spectrum's PAIRED data-status block gets
+    /// first claim on bare parameter keys (NPT/FXV/LXV/CSF/DXU), then the
+    /// sample/instrument/acquisition context, then everything else. Directory
+    /// order is preserved within each tier so bare-key vs. prefixed assignment
+    /// stays deterministic. Without this, a decoy block earlier in the file
+    /// (e.g. an interferogram's IgSm data-status) would capture bare keys that
+    /// belong to the displayed result, misleading the inspector.
+    static func orderedParamBlocks(paramBlocks: [Int: [String: OPUSValue]],
+                                   blocks: [Block], statusIndex: Int)
+        -> [(String, [String: OPUSValue])] {
+        var tiers: [[Int]] = [[], [], []]
+        for i in paramBlocks.keys.sorted() {   // directory order
+            let tier: Int
+            if i == statusIndex { tier = 0 }
+            else if priorityBlockNames.contains(blocks[i].name) { tier = 1 }
+            else { tier = 2 }
+            tiers[tier].append(i)
+        }
+        return (tiers[0] + tiers[1] + tiers[2]).map { (blocks[$0].name, paramBlocks[$0]!) }
     }
 
     // MARK: - Parameter blocks
@@ -406,14 +450,15 @@ public enum OPUSReader {
             warnings.append(SpectrumWarning("OPUS result block assumed to be absorbance"))
         }
 
-        // Collect parameters. Blocks are visited in file (directory) order, in
-        // which the sample/primary channel precedes its reference (Rf) twin.
-        // The first block to carry a key owns the bare key name; a later block
+        // Collect parameters. `allParams` arrives in priority order (see
+        // orderedParamBlocks): this spectrum's paired data-status block first,
+        // then the sample/instrument/acquisition context, then the rest. The
+        // first block to carry a key owns the bare key name; a later block
         // repeating the same value is dropped (the common sample/reference
         // duplicate, e.g. INS in Instrument and Instrument (Rf)). A later block
         // with a genuinely DIFFERENT value is kept, block-name-prefixed, so no
-        // data is lost (e.g. "Acquisition (Rf).PLF" when the reference channel
-        // is transmittance while the sample result is absorbance).
+        // data is lost (e.g. "IgSm Data Parameter.NPT" when an interferogram
+        // channel reports a different point count than the result spectrum).
         var parameters: [Parameter] = []
         var bareValueForKey: [String: String] = [:]
         var snm: String?

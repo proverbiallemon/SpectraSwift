@@ -172,6 +172,52 @@ private struct GroundTruth: Decodable {
     #expect(titles.dropFirst().contains { $0.hasSuffix(" (2)") })
 }
 
+// MARK: - Directory location (Defect A) and parameter ownership (Defect B)
+
+/// The directory can legally live outside the first 504 bytes (real ATR files
+/// use offset 8536). Reading it from the header's directory_start field must
+/// yield an identical spectrum to the inline-directory case.
+@Test func directoryBeyondHeaderRegionParsesIdentically() throws {
+    let inline = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB"), sourceURL: nil).first)
+    let relocated = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", directoryStart: 8536),
+                        sourceURL: nil).first)
+    #expect(relocated.points.count == 4)
+    #expect(inline.points.count == relocated.points.count)
+    for i in inline.points.indices {
+        #expect(abs(inline.points[i].x - relocated.points[i].x) < 1e-9, "x[\(i)]")
+        #expect(abs(inline.points[i].y - relocated.points[i].y) < 1e-9, "y[\(i)]")
+    }
+}
+
+/// A directory_start pointing past EOF must fail cleanly with a malformed
+/// error, never trap or read out of bounds.
+@Test func directoryStartBeyondEOFThrowsMalformed() {
+    var blob = makeOPUSBlob(plf: "AB")
+    blob.replaceSubrange(12..<16, with: le32(UInt32(blob.count + 10_000)))
+    #expect {
+        _ = try OPUSReader.read(data: blob, sourceURL: nil)
+    } throws: { error in
+        guard case OPUSError.malformed = error else { return false }
+        return true
+    }
+}
+
+/// When a decoy data-status block (an interferogram's IgSm block) precedes the
+/// AB Data Parameter block in directory order with a conflicting NPT, the
+/// paired AB status must still own the bare `NPT` key; the decoy only appears
+/// under a block-name-prefixed key.
+@Test func pairedStatusBlockOwnsBareKeysOverDecoy() throws {
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", decoyIgSmNPT: 999),
+                        sourceURL: nil).first)
+    #expect(s.parameters.contains { $0.key == "NPT" && $0.value == "4" })
+    #expect(!s.parameters.contains { $0.key == "NPT" && $0.value == "999" })
+    #expect(s.parameters.contains {
+        $0.key == "IgSm Data Parameter.NPT" && $0.value == "999" })
+}
+
 // MARK: - Synthetic OPUS blob builder
 
 private func le16(_ v: UInt16) -> Data { Data([UInt8(v & 0xFF), UInt8(v >> 8)]) }
@@ -209,9 +255,18 @@ private func dirEntry(dataType: UInt8, channelType: UInt8,
 
 /// A minimal, structurally valid OPUS file: header, directory, AB data-status
 /// parameter block, sample Acquisition block, and an AB data block of 4 floats.
+///
+/// `directoryStart` relocates the directory table to a high byte offset (the
+/// payload then follows the header, zero-padded up to the directory) to model
+/// real files whose directory lives outside the first 504 bytes; when nil the
+/// directory sits inline at byte 24. `decoyIgSmNPT` prepends an IgSm
+/// data-status block (earlier than the AB status in directory order) carrying a
+/// conflicting NPT, to model an interferogram channel competing for bare keys.
 private func makeOPUSBlob(plf: String?, dxu: String? = "WN",
                           dpf: Int32? = nil, csf: Double = 1.0,
-                          extraOutOfBoundsEntries: Int = 0) -> Data {
+                          extraOutOfBoundsEntries: Int = 0,
+                          directoryStart: Int? = nil,
+                          decoyIgSmNPT: Int? = nil) -> Data {
     var status = Data()
     if let dpf { status += record("DPF", type: 0, value: le32(UInt32(bitPattern: dpf))) }
     status += record("NPT", type: 0, value: le32(4))
@@ -230,27 +285,56 @@ private func makeOPUSBlob(plf: String?, dxu: String? = "WN",
     var ab = Data()
     for f: Float in [0.1, 0.2, 0.3, 0.4] { ab += le32(f.bitPattern) }
 
-    let entryCount = 4 + extraOutOfBoundsEntries
-    let payloadStart = 24 + entryCount * 12
+    var decoyBlock = Data()
+    if let decoyIgSmNPT {
+        var d = Data()
+        d += record("NPT", type: 0, value: le32(UInt32(decoyIgSmNPT)))
+        d += record("END", type: 0, value: Data())
+        decoyBlock = paddedToWord(d)
+    }
+
+    // Entry count: optional decoy + status + acq + out-of-bounds + AB + stop.
+    let entryCount = (decoyIgSmNPT != nil ? 1 : 0) + extraOutOfBoundsEntries + 4
+    let inlineDirectory = directoryStart == nil
+    let dirStart = directoryStart ?? 24
+    // The payload sits right after the header when the directory is relocated,
+    // otherwise right after the inline directory table.
+    let payloadStart = inlineDirectory ? (24 + entryCount * 12) : 24
     let statusOffset = payloadStart
     let acqOffset = statusOffset + statusBlock.count
     let abOffset = acqOffset + acqBlock.count
+    let decoyOffset = abOffset + ab.count
+
+    var dir = Data()
+    if decoyIgSmNPT != nil {                     // decoy first in directory order
+        dir += dirEntry(dataType: 23, channelType: 8, offset: decoyOffset,
+                        byteCount: decoyBlock.count)
+    }
+    dir += dirEntry(dataType: 31, channelType: 16, offset: statusOffset,
+                    byteCount: statusBlock.count)
+    dir += dirEntry(dataType: 48, channelType: 0, offset: acqOffset,
+                    byteCount: acqBlock.count)
+    for _ in 0..<extraOutOfBoundsEntries {       // entries pointing past EOF
+        dir += dirEntry(dataType: 7, channelType: 4, offset: 1_000_000, byteCount: 4)
+    }
+    dir += dirEntry(dataType: 15, channelType: 16, offset: abOffset,
+                    byteCount: ab.count)
+    dir += dirEntry(dataType: 0, channelType: 0, offset: 0, byteCount: 0)  // stop
+
+    let payload = statusBlock + acqBlock + ab + decoyBlock
 
     var blob = Data([0x0A, 0x0A, 0xFE, 0xFE])   // magic
     blob += le64(0)                             // version (double), unused
-    blob += le32(24)                            // directory start
+    blob += le32(UInt32(dirStart))              // directory start
     blob += le32(UInt32(entryCount))            // max blocks
     blob += le32(UInt32(entryCount))            // used blocks
-    blob += dirEntry(dataType: 31, channelType: 16, offset: statusOffset,
-                     byteCount: statusBlock.count)
-    blob += dirEntry(dataType: 48, channelType: 0, offset: acqOffset,
-                     byteCount: acqBlock.count)
-    for _ in 0..<extraOutOfBoundsEntries {      // entries pointing past EOF
-        blob += dirEntry(dataType: 7, channelType: 4, offset: 1_000_000, byteCount: 4)
+    if inlineDirectory {
+        blob += dir
+        blob += payload
+    } else {
+        blob += payload
+        if blob.count < dirStart { blob.append(Data(count: dirStart - blob.count)) }
+        blob += dir
     }
-    blob += dirEntry(dataType: 15, channelType: 16, offset: abOffset,
-                     byteCount: ab.count)
-    blob += dirEntry(dataType: 0, channelType: 0, offset: 0, byteCount: 0)  // stop
-    blob += statusBlock + acqBlock + ab
     return blob
 }
