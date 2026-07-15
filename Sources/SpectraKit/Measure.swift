@@ -45,8 +45,8 @@ public enum Measure {
         let ys = pts.map { sign * $0.y }
         let yLo = ys.min() ?? 0, yHi = ys.max() ?? 0
         let threshold = minProminence ?? (yHi - yLo) * 0.05
-        // Default threshold on a flat spectrum is 0 — nothing meaningful to
-        // find. An EXPLICIT 0 means "keep every local extremum".
+        // Default threshold on a flat spectrum is 0, so there is nothing
+        // meaningful to find. An EXPLICIT 0 means "keep every local extremum".
         if minProminence == nil && threshold <= 0 { return [] }
         guard threshold >= 0 else { return [] }
 

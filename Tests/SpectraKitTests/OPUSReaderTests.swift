@@ -127,6 +127,51 @@ private struct GroundTruth: Decodable {
     #expect(oob.contains { $0.message.contains("more") })
 }
 
+@Test func syntheticPresentButUnmappedPLFReportsOtherWithDistinctWarning() throws {
+    // A PLF that is present but not one we map (RF = reflectance) must be
+    // reported truthfully as .other, not silently coerced to absorbance.
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "RF"), sourceURL: nil).first)
+    #expect(s.yUnit == .other("RF"))
+    #expect(s.warnings.contains {
+        $0.message.contains("Unsupported OPUS result type 'RF'") })
+    // The distinct warning must NOT masquerade as the assumed-absorbance one.
+    #expect(!s.warnings.contains { $0.message.contains("assumed to be absorbance") })
+}
+
+@Test func syntheticCSFScalesYValues() throws {
+    // CSF (common scaling factor) != 1 multiplies the stored float32 series.
+    // Raw floats are [0.1, 0.2, 0.3, 0.4]; with CSF 2.5 they scale up.
+    let s = try #require(
+        OPUSReader.read(data: makeOPUSBlob(plf: "AB", csf: 2.5), sourceURL: nil).first)
+    #expect(s.points.count == 4)
+    let expected: [Double] = [0.1, 0.2, 0.3, 0.4].map { $0 * 2.5 }
+    for (i, e) in expected.enumerated() {
+        #expect(abs(s.points[i].y - e) < 1e-6, "y[\(i)]")
+    }
+}
+
+@Test func fixtureCapacityMismatchWarnsNamingBothCounts() throws {
+    // brukeropus-example-file.0's AB block holds 4928 floats but NPT is 4927;
+    // the reader now surfaces that mismatch instead of truncating silently.
+    let s = try #require(
+        OPUSReader.read(data: fixtureData("brukeropus-example-file.0"),
+                        sourceURL: nil).first)
+    #expect(s.warnings.contains {
+        $0.message.contains("4928") && $0.message.contains("4927") })
+}
+
+@Test func duplicateTitlesAreDisambiguated() throws {
+    // This fixture yields two spectra with identical SNM-derived titles; the
+    // later one must be suffixed so sidebar/results entries stay distinct.
+    let spectra = try OPUSReader.read(
+        data: fixtureData("opusreader2-629266_1TP_A-1_C1.0"), sourceURL: nil)
+    try #require(spectra.count >= 2, "fixture expected to yield multiple spectra")
+    let titles = spectra.map(\.title)
+    #expect(Set(titles).count == titles.count, "titles must be unique: \(titles)")
+    #expect(titles.dropFirst().contains { $0.hasSuffix(" (2)") })
+}
+
 // MARK: - Synthetic OPUS blob builder
 
 private func le16(_ v: UInt16) -> Data { Data([UInt8(v & 0xFF), UInt8(v >> 8)]) }
@@ -165,14 +210,14 @@ private func dirEntry(dataType: UInt8, channelType: UInt8,
 /// A minimal, structurally valid OPUS file: header, directory, AB data-status
 /// parameter block, sample Acquisition block, and an AB data block of 4 floats.
 private func makeOPUSBlob(plf: String?, dxu: String? = "WN",
-                          dpf: Int32? = nil,
+                          dpf: Int32? = nil, csf: Double = 1.0,
                           extraOutOfBoundsEntries: Int = 0) -> Data {
     var status = Data()
     if let dpf { status += record("DPF", type: 0, value: le32(UInt32(bitPattern: dpf))) }
     status += record("NPT", type: 0, value: le32(4))
     status += record("FXV", type: 1, value: le64(Double(4000).bitPattern))
     status += record("LXV", type: 1, value: le64(Double(1000).bitPattern))
-    status += record("CSF", type: 1, value: le64(Double(1).bitPattern))
+    status += record("CSF", type: 1, value: le64(csf.bitPattern))
     if let dxu { status += record("DXU", type: 2, value: Data(dxu.utf8)) }
     status += record("END", type: 0, value: Data())
     let statusBlock = paddedToWord(status)

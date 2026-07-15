@@ -114,7 +114,24 @@ public enum OPUSReader {
         guard !spectra.isEmpty else {
             throw OPUSError.noSpectrumData(found: blocks.map(\.name))
         }
+        disambiguateTitles(&spectra)
         return spectra
+    }
+
+    /// When one file yields several spectra sharing a title (multi-AB files
+    /// whose SNM is identical), suffix the second and later occurrences with
+    /// " (2)", " (3)", ... so sidebar and results-table entries stay
+    /// distinguishable. The first occurrence keeps its bare title.
+    static func disambiguateTitles(_ spectra: inout [Spectrum]) {
+        var seen: [String: Int] = [:]
+        for i in spectra.indices {
+            let base = spectra[i].title
+            let n = (seen[base] ?? 0) + 1
+            seen[base] = n
+            if n > 1 {
+                spectra[i].title = "\(base) (\(n))"
+            }
+        }
     }
 
     // MARK: - Directory
@@ -329,13 +346,15 @@ public enum OPUSReader {
         }
 
         // Y values: float32 LE array in the data block. Read exactly NPT values
-        // when the block holds at least that many; only warn+truncate when the
-        // block holds FEWER than NPT. Never read past the block.
+        // when the block holds at least that many; when it holds FEWER, read
+        // what is there. Never read past the block. Any mismatch between block
+        // capacity and NPT (in either direction) is worth a warning: a smaller
+        // block means truncation, a larger one means trailing floats we ignore.
         let capacity = abBlock.byteCount / 4
         let count = min(npt, capacity)
-        if capacity < npt {
+        if capacity != npt {
             warnings.append(SpectrumWarning(
-                "AB data block holds \(capacity) points but NPT is \(npt); truncated"))
+                "OPUS data block holds \(capacity) values but NPT says \(npt); read \(count)"))
         }
 
         let csf = status["CSF"]?.doubleValue
@@ -368,14 +387,20 @@ public enum OPUSReader {
         // the stored result kind (AB = absorbance, TR = transmittance). Only
         // the sample block counts; the "Acquisition (Rf)" twin describes the
         // reference channel and can legitimately disagree (e.g. TR while the
-        // result is AB). Anything else falls back to absorbance with a warning
-        // so the assumption is never silent.
+        // result is AB). A PLF that is present but unmapped (e.g. RF
+        // reflectance, KM Kubelka-Munk) is reported truthfully as .other with a
+        // distinct warning; a missing or empty PLF falls back to absorbance
+        // with the assumed warning so neither case is ever silent.
         let plf = (allParams.first { $0.0 == "Acquisition" }?.1["PLF"]?.stringValue)?
             .trimmingCharacters(in: .whitespaces).uppercased()
         let yUnit: YUnit
         switch plf {
         case "AB": yUnit = .absorbance
         case "TR": yUnit = .transmittance
+        case .some(let raw) where !raw.isEmpty:
+            yUnit = .other(raw)
+            warnings.append(SpectrumWarning(
+                "Unsupported OPUS result type '\(raw)'; y-axis may not be meaningful for display conversions"))
         default:
             yUnit = .absorbance
             warnings.append(SpectrumWarning("OPUS result block assumed to be absorbance"))
