@@ -32,6 +32,18 @@
 				<string>me.pbweb.spectra.session</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Bruker OPUS Spectrum</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>me.pbweb.spectra.opus</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
@@ -91,6 +103,32 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>spectrasession</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Bruker OPUS Spectrum</string>
+			<key>UTTypeIdentifier</key>
+			<string>me.pbweb.spectra.opus</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>0</string>
+					<string>1</string>
+					<string>2</string>
+					<string>3</string>
+					<string>4</string>
+					<string>5</string>
+					<string>6</string>
+					<string>7</string>
+					<string>8</string>
+					<string>9</string>
 				</array>
 			</dict>
 		</dict>

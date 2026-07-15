@@ -2,7 +2,6 @@ import Foundation
 
 public enum SpectrumFileError: Error, Equatable {
     case unrecognizedFormat
-    case opusNotYetSupported   // phase 2
     case unreadable(String)
 }
 
@@ -18,7 +17,7 @@ public enum SpectrumFile {
 
     public static func read(data: Data, sourceURL: URL?) throws -> [Spectrum] {
         if data.count >= 4, Array(data.prefix(4)) == opusMagic {
-            throw SpectrumFileError.opusNotYetSupported
+            return try OPUSReader.read(data: data, sourceURL: sourceURL)
         }
         // JCAMP: first non-blank content starts with ##TITLE (allow BOM/whitespace)
         if let head = String(data: data.prefix(512), encoding: .utf8)

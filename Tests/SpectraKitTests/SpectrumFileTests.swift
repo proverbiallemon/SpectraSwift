@@ -15,11 +15,11 @@ private func fixtureURL(_ name: String) throws -> URL {
     #expect(spectra.count == 1)
 }
 
-@Test func sniffsOPUSMagicAsUnsupportedForNow() {
-    let d = Data([0x0A, 0x0A, 0xFE, 0xFE, 0x00, 0x00])
-    #expect(throws: SpectrumFileError.self) {
-        _ = try SpectrumFile.read(data: d, sourceURL: nil)
-    }
+@Test func routesOPUSMagicToOPUSReader() throws {
+    let url = try fixtureURL("brukeropus-example-file.0")
+    let data = try Data(contentsOf: url)
+    let spectra = try SpectrumFile.read(data: data, sourceURL: nil)
+    #expect(!spectra.isEmpty)
 }
 
 @Test func rejectsUnknown() {

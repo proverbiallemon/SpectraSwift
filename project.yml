@@ -33,6 +33,10 @@ targets:
             CFBundleTypeRole: Editor
             LSHandlerRank: Owner
             LSItemContentTypes: [me.pbweb.spectra.session]
+          - CFBundleTypeName: Bruker OPUS Spectrum
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [me.pbweb.spectra.opus]
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: me.pbweb.spectra.jcamp-dx
             UTTypeDescription: JCAMP-DX Spectrum
@@ -45,6 +49,11 @@ targets:
             UTTypeConformsTo: [public.json]
             UTTypeTagSpecification:
               public.filename-extension: [spectrasession]
+          - UTTypeIdentifier: me.pbweb.spectra.opus
+            UTTypeDescription: Bruker OPUS Spectrum
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     settings:
       base:
         CODE_SIGN_IDENTITY: "-"

@@ -138,6 +138,7 @@ struct SpectraApp: App {
         panel.allowedContentTypes = [
             UTType(filenameExtension: "jdx") ?? .plainText,
             UTType(filenameExtension: "dx") ?? .plainText,
+            UTType(exportedAs: "me.pbweb.spectra.opus"),
         ]
         if panel.runModal() == .OK {
             appState.load(urls: panel.urls)

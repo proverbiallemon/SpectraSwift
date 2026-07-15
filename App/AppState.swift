@@ -60,6 +60,8 @@ final class AppState {
                 loadErrors.append(LoadError(fileName: url.lastPathComponent, reason: describe(e)))
             } catch let e as JCAMPError {
                 loadErrors.append(LoadError(fileName: url.lastPathComponent, reason: describe(e)))
+            } catch let e as OPUSError {
+                loadErrors.append(LoadError(fileName: url.lastPathComponent, reason: describe(e)))
             } catch {
                 loadErrors.append(LoadError(fileName: url.lastPathComponent,
                                       reason: error.localizedDescription))
@@ -313,9 +315,7 @@ final class AppState {
     private func describe(_ e: SpectrumFileError) -> String {
         switch e {
         case .unrecognizedFormat:
-            "Not a recognized spectrum format (expected JCAMP-DX)."
-        case .opusNotYetSupported:
-            "This is a Bruker OPUS binary file — support is coming in a later version."
+            "Not a recognized spectrum format (expected JCAMP-DX or Bruker OPUS)."
         case .unreadable(let why):
             "Couldn't read the file: \(why)"
         }
@@ -325,6 +325,18 @@ final class AppState {
         case .notJCAMP: "The file doesn't start with a JCAMP ##TITLE= record."
         case .unsupported(let what): "Unsupported JCAMP feature: \(what)"
         case .malformed(let what): "Malformed JCAMP data: \(what)"
+        }
+    }
+    private func describe(_ e: OPUSError) -> String {
+        switch e {
+        case .notOPUS:
+            "Not a Bruker OPUS binary file."
+        case .malformed(let why):
+            "Malformed OPUS file: \(why)"
+        case .noSpectrumData(let found):
+            found.isEmpty
+                ? "This OPUS file has no recognizable blocks."
+                : "This OPUS file has no absorbance spectrum. It contains: \(found.joined(separator: ", "))."
         }
     }
 }
