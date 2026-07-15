@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Read and validate build number
+        id: build
+        run: |
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" App/Info.plist)
+          SHORT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" App/Info.plist)
+          if [ "$SHORT" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Tag ${{ steps.version.outputs.version }} does not match Info.plist version $SHORT. Bump project.yml and regenerate before tagging."
+            exit 1
+          fi
+          PREV=$(sed -n 's/.*<sparkle:version>\([0-9]*\)<\/sparkle:version>.*/\1/p' appcast.xml | head -1)
+          PREV=${PREV:-0}
+          if [ "$BUILD" -le "$PREV" ]; then
+            echo "CFBundleVersion $BUILD must be greater than the last released build $PREV."
+            exit 1
+          fi
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
+
+      - name: Generate project and build
+        run: |
+          xcodegen generate
+          xcodebuild -project Spectra.xcodeproj \
+            -scheme Spectra \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Re-sign frameworks and app
+        run: |
+          APP_PATH="build/Build/Products/Release/Spectra.app"
+          codesign --force --deep --sign - "$APP_PATH/Contents/Frameworks/Sparkle.framework"
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+
+      - name: Create zip
+        run: |
+          cd build/Build/Products/Release
+          zip -r -y ../../../../SpectraSwift-${{ steps.version.outputs.version }}.zip Spectra.app
+
+      - name: Download Sparkle tools
+        run: |
+          curl -LO https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
+          tar -xf Sparkle-2.6.4.tar.xz
+
+      - name: Sign update
+        id: sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          echo "$SPARKLE_PRIVATE_KEY" > sparkle_private_key
+          FILE_SIZE=$(stat -f%z "SpectraSwift-${{ steps.version.outputs.version }}.zip")
+          SIGN_OUTPUT=$(./bin/sign_update "SpectraSwift-${{ steps.version.outputs.version }}.zip" -f sparkle_private_key)
+          SIGNATURE=$(echo "$SIGN_OUTPUT" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p')
+          rm sparkle_private_key
+          if [ -z "$SIGNATURE" ]; then echo "sign_update produced no signature"; exit 1; fi
+          echo "signature=$SIGNATURE" >> $GITHUB_OUTPUT
+          echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
+
+      - name: Release notes from tag
+        id: notes
+        run: |
+          NOTES=$(git tag -l --format='%(contents:body)' "v${{ steps.version.outputs.version }}")
+          if [ -z "$NOTES" ]; then
+            NOTES="See https://github.com/proverbiallemon/SpectraSwift/releases/tag/v${{ steps.version.outputs.version }}"
+          fi
+          NOTES=${NOTES//]]>/]] >}
+          DELIM="NOTES_EOF_$(uuidgen)"
+          {
+            echo "notes<<${DELIM}"
+            echo "$NOTES"
+            echo "${DELIM}"
+          } >> $GITHUB_OUTPUT
+
+      - name: Update appcast
+        env:
+          NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_NUMBER="${{ steps.build.outputs.build }}"
+          SIGNATURE="${{ steps.sign.outputs.signature }}"
+          FILE_SIZE="${{ steps.sign.outputs.file_size }}"
+          DATE=$(date -R)
+          DOWNLOAD_URL="https://github.com/proverbiallemon/SpectraSwift/releases/download/v${VERSION}/SpectraSwift-${VERSION}.zip"
+          NOTES_HTML="<pre>${NOTES}</pre>"
+
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
+          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">' >> appcast.xml
+          printf '%s\n' '    <channel>' >> appcast.xml
+          printf '%s\n' '        <title>Spectra Swift Updates</title>' >> appcast.xml
+          printf '%s\n' '        <link>https://github.com/proverbiallemon/SpectraSwift</link>' >> appcast.xml
+          printf '%s\n' '        <description>Spectra Swift update feed</description>' >> appcast.xml
+          printf '%s\n' '        <language>en</language>' >> appcast.xml
+          printf '%s\n' '        <item>' >> appcast.xml
+          printf '%s\n' "            <title>Version ${VERSION}</title>" >> appcast.xml
+          printf '%s\n' "            <pubDate>${DATE}</pubDate>" >> appcast.xml
+          printf '%s\n' "            <sparkle:version>${BUILD_NUMBER}</sparkle:version>" >> appcast.xml
+          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
+          printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
+          printf '%s\n' '            <description><![CDATA[' >> appcast.xml
+          printf '%s\n' "${NOTES_HTML}" >> appcast.xml
+          printf '%s\n' '            ]]></description>' >> appcast.xml
+          printf '%s\n' "            <enclosure url=\"${DOWNLOAD_URL}\"" >> appcast.xml
+          printf '%s\n' "                       sparkle:edSignature=\"${SIGNATURE}\"" >> appcast.xml
+          printf '%s\n' "                       length=\"${FILE_SIZE}\"" >> appcast.xml
+          printf '%s\n' '                       type="application/octet-stream" />' >> appcast.xml
+          printf '%s\n' '        </item>' >> appcast.xml
+          printf '%s\n' '    </channel>' >> appcast.xml
+          printf '%s\n' '</rss>' >> appcast.xml
+
+      - name: Commit appcast
+        run: |
+          cp appcast.xml /tmp/appcast.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -f -B main origin/main
+          cp /tmp/appcast.xml appcast.xml
+          git add appcast.xml
+          git commit -m "Update appcast for v${{ steps.version.outputs.version }}"
+          git push origin main
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Spectra Swift v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          files: SpectraSwift-${{ steps.version.outputs.version }}.zip
+          body: |
+            ${{ steps.notes.outputs.notes }}
+
+            ### Installation
+            Extract and drag Spectra.app to your Applications folder. First
+            launch needs the Gatekeeper bypass described in the README.
+            After that, Spectra updates itself: it checks daily, and you can
+            check any time with Spectra > Check for Updates.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
