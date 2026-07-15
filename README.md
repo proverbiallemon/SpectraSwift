@@ -1,13 +1,14 @@
 # Spectra Swift
 
-A native macOS viewer for JCAMP-DX spectroscopy files, the format the NIST
-WebBook serves for IR, mass, and UV-Vis spectra. Built with Swift and SwiftUI.
+A native macOS viewer for spectroscopy files: JCAMP-DX, the format the
+NIST WebBook serves for IR, mass, and UV-Vis spectra, and Bruker OPUS
+files straight from the spectrometer. Built with Swift and SwiftUI.
 
-Drop a `.jdx` or `.dx` file onto the window (or double-click it in Finder)
-and you get an interactive plot that follows the conventions chemists
-expect: IR spectra draw with the wavenumber axis running high to low,
-mass spectra draw as stick plots, and a toolbar toggle converts IR data
-between transmittance and absorbance on the fly.
+Drop a `.jdx`, `.dx`, or OPUS `.0` file onto the window (or double-click
+it in Finder) and you get an interactive plot that follows the
+conventions chemists expect: IR spectra draw with the wavenumber axis
+running high to low, mass spectra draw as stick plots, and a toolbar
+toggle converts IR data between transmittance and absorbance on the fly.
 
 ## Screenshots
 
@@ -37,6 +38,14 @@ every parameter from the file in the searchable inspector:
 - **Measure** - Pick peaks by hand or detect them automatically, measure
   baseline-referenced peak heights, and integrate the area between two
   points. Results land in a table you can copy into Excel or export as CSV.
+- **Label peaks** - Picked peaks are labeled on the plot, and you can
+  rename any label in the results table ("C-H stretch" beats "3086.2").
+  Labels carry into exported images and the peak table.
+- **Smooth** - A Savitzky-Golay filter with a live preview cleans up noisy
+  instrument data. The result appears as a new spectrum; the original
+  data is never touched.
+- **Open instrument files** - Bruker OPUS files (`.0`, `.1`, ...) open
+  directly, including the processed spectrum and instrument metadata.
 - **Difference spectra** - Subtract one spectrum from another to spot
   what changed.
 - **Sessions** - Save your whole workspace (files, colors, measurements,
@@ -56,6 +65,15 @@ every parameter from the file in the searchable inspector:
    [latest release](https://github.com/proverbiallemon/SpectraSwift/releases/latest)
 2. Unzip it and drag `Spectra.app` into your Applications folder
 3. **First launch**: see [Bypassing Gatekeeper](#bypassing-gatekeeper) below
+
+After that the app keeps itself current: it checks for updates once a
+day, and you can check any time with **Spectra Swift ▸ Check for
+Updates**. Updates install and relaunch in place, with no Gatekeeper
+dance the second time around.
+
+One quirk worth knowing: OPUS files use bare numeric extensions (`.0`,
+`.1`), which other apps sometimes claim. If double-clicking one doesn't
+open Spectra Swift, right-click it and choose **Open With** once.
 
 > **Note**: Spectra Swift isn't signed with an Apple Developer certificate,
 > so macOS will block it on first launch. This is normal for open-source
@@ -109,6 +127,14 @@ one NIST's quantitative IR database uses). Malformed files degrade
 gracefully: recoverable oddities load with a warning badge instead of
 failing, and unreadable files produce a clear error naming the reason.
 
+Bruker OPUS binary files import their processed result spectrum
+(absorbance or transmittance, detected from the file), the x grid, and
+every instrument, sample, and acquisition parameter for the inspector.
+Interferograms and raw single-channel data are skipped; a file holding
+only those says so instead of guessing. The reader was validated against
+reference implementations and tested on files straight off a working
+spectrometer.
+
 Parsing lives in `SpectraKit`, a UI-free Swift package, and is tested
 against fixtures downloaded from NIST as well as synthetic edge cases.
 
@@ -140,9 +166,8 @@ project.yml           XcodeGen project definition
 
 ## Planned
 
-Smoothing for noisy instrument data, normalizing spectra to a reference
-peak, peak labels drawn on the plot, and full baseline correction. Ideas
-and bug reports welcome in the
+Normalizing spectra to a reference peak, full baseline correction, and
+eventually spectral library search. Ideas and bug reports welcome in the
 [issues](https://github.com/proverbiallemon/SpectraSwift/issues).
 
 ## License
