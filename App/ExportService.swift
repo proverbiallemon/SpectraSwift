@@ -127,14 +127,14 @@ enum ExportService {
         return out
     }
 
-    private static func csvField(_ field: String) -> String {
+    nonisolated private static func csvField(_ field: String) -> String {
         guard field.contains(",") || field.contains("\"") || field.contains("\n") else {
             return field
         }
         return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 
-    private static func csvRow(_ fields: [String]) -> String {
+    nonisolated private static func csvRow(_ fields: [String]) -> String {
         fields.map(csvField).joined(separator: ",") + "\n"
     }
 
