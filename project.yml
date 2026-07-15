@@ -8,6 +8,9 @@ options:
 packages:
   SpectraKit:
     path: .
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.4"
 targets:
   Spectra:
     type: application
@@ -15,15 +18,20 @@ targets:
     sources: [App]
     dependencies:
       - package: SpectraKit
+      - package: Sparkle
     info:
       path: App/Info.plist
       properties:
         CFBundleName: Spectra
         CFBundleDisplayName: Spectra Swift
-        CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "2"
         LSMinimumSystemVersion: "14.0"
         NSPrincipalClass: NSApplication
+        SUFeedURL: https://raw.githubusercontent.com/proverbiallemon/SpectraSwift/main/appcast.xml
+        SUPublicEDKey: IfgbZtXSDm3jx5t2rEhAdtIL/hlH2VS536onnOlPSis=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
         CFBundleDocumentTypes:
           - CFBundleTypeName: JCAMP-DX Spectrum
             CFBundleTypeRole: Viewer

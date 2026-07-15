@@ -50,6 +50,9 @@ struct SpectraApp: App {
                 .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesButton()
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Open…") { openFiles() }
                     .keyboardShortcut("o")
@@ -153,5 +156,16 @@ struct SpectraApp: App {
         alert.informativeText = "The rest of the session loaded. Missing:\n"
             + paths.joined(separator: "\n")
         alert.runModal()
+    }
+}
+
+/// Note: this view lives here, not in UpdaterService.swift, so the
+/// updater wiring and the menu that uses it stay next to each other.
+struct CheckForUpdatesButton: View {
+    @StateObject private var vm = CheckForUpdatesViewModel(updater: UpdaterService.shared.updater)
+
+    var body: some View {
+        Button("Check for Updates…") { UpdaterService.shared.checkForUpdates() }
+            .disabled(!vm.canCheckForUpdates)
     }
 }
