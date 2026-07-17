@@ -95,6 +95,9 @@ jobs:
       - name: Release notes from tag
         id: notes
         run: |
+          # actions/checkout peels annotated tags to commits; re-fetch the
+          # real tag object so its message is readable.
+          git fetch --force origin "refs/tags/v${{ steps.version.outputs.version }}:refs/tags/v${{ steps.version.outputs.version }}"
           NOTES=$(git tag -l --format='%(contents:body)' "v${{ steps.version.outputs.version }}")
           if [ -z "$NOTES" ]; then
             NOTES="See https://github.com/proverbiallemon/SpectraSwift/releases/tag/v${{ steps.version.outputs.version }}"
