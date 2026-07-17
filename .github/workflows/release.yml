@@ -112,7 +112,7 @@ jobs:
           ditto -c -k --keepParent Spectra.app notarize-me.zip
           xcrun notarytool submit notarize-me.zip \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$NOTARY_PASSWORD" \
-            --wait --timeout 30m
+            --wait --timeout 90m
           xcrun stapler staple Spectra.app
           rm notarize-me.zip
 
