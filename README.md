@@ -166,8 +166,10 @@ project.yml           XcodeGen project definition
 
 ## Planned
 
-Normalizing spectra to a reference peak, full baseline correction, and
-eventually spectral library search. Ideas and bug reports welcome in the
+Normalizing spectra to a reference peak, friendlier handling of Raman
+files (they currently draw with the IR axis convention), and reading
+the instrument-parameter blocks that some ATR files use, so the
+inspector fills in for those too. Ideas and bug reports welcome in the
 [issues](https://github.com/proverbiallemon/SpectraSwift/issues).
 
 ## License
