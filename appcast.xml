@@ -6,17 +6,17 @@
         <description>Spectra Swift update feed</description>
         <language>en</language>
         <item>
-            <title>Version 1.1.0</title>
-            <pubDate>Wed, 15 Jul 2026 05:30:33 +0000</pubDate>
-            <sparkle:version>2</sparkle:version>
-            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <title>Version 1.1.1</title>
+            <pubDate>Fri, 17 Jul 2026 05:30:33 +0000</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <description><![CDATA[
-<pre>See https://github.com/proverbiallemon/SpectraSwift/releases/tag/v1.1.0</pre>
+<pre>See https://github.com/proverbiallemon/SpectraSwift/releases/tag/v1.1.1</pre>
             ]]></description>
-            <enclosure url="https://github.com/proverbiallemon/SpectraSwift/releases/download/v1.1.0/SpectraSwift-1.1.0.zip"
-                       sparkle:edSignature="WrYnxT8/sTpOOnHKy8fX40pBq3YIWAZIH0hJepMxe0WvjbRiW+f9DDRiMIeh102Xw3Bp+Lw72TYBoqf+L1tKBw=="
-                       length="1980492"
+            <enclosure url="https://github.com/proverbiallemon/SpectraSwift/releases/download/v1.1.1/SpectraSwift-1.1.1.zip"
+                       sparkle:edSignature="e//qip7ksl3XWAnz5bVpGAyK3uAwyFFrN+7xfh3M2fnWC0tdMUDHwN+vIM7DmBTSqbafhmqeBP3ZkdVNugqoAw=="
+                       length="1982934"
                        type="application/octet-stream" />
         </item>
     </channel>
