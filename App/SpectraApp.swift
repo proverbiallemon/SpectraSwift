@@ -124,6 +124,14 @@ struct SpectraApp: App {
             // sidebar is unrecoverable, since the custom detail toolbar
             // replaces the automatic sidebar-toggle button.
             SidebarCommands()
+            CommandGroup(replacing: .help) {
+                Button("Spectra Swift Help") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/proverbiallemon/SpectraSwift/wiki")!)
+                }
+                Button("Tips and Shortcuts") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/proverbiallemon/SpectraSwift/wiki/Tips-and-Shortcuts")!)
+                }
+            }
         }
     }
 
