@@ -1,33 +1,18 @@
 # Troubleshooting
 
-## The app won't open ("Spectra" Not Opened, or similar)
+## The app won't open
 
-Spectra Swift isn't signed with an Apple Developer certificate (that
-costs $99 a year, and this is a free, open-source app), so macOS blocks
-it the first time you try to run it. This is normal for open-source
-Mac apps distributed outside the App Store, and it only happens once.
+Releases from 1.1.2 on are signed with a Developer ID certificate and
+notarized by Apple, so macOS opens them like any other app. If a fresh
+download refuses to open, make sure it came from the
+[releases page](https://github.com/proverbiallemon/SpectraSwift/releases)
+and that the zip finished downloading, then try again.
 
-**macOS Sequoia (15.0) and later**
-
-1. Double-click Spectra.app. You'll see "Spectra" Not Opened.
-2. Click Done (not "Move to Trash").
-3. Open System Settings, then Privacy & Security.
-4. Scroll to Security and find "Spectra was blocked to protect your Mac."
-5. Click Open Anyway, then confirm with Open Anyway again.
-
-**macOS Sonoma (14.x)**
-
-1. Right-click Spectra.app and choose Open.
-2. Click Open in the dialog that appears.
-
-**Terminal alternative (any version)**
-
-```sh
-xattr -cr /Applications/Spectra.app
-```
-
-After the first successful launch, Gatekeeper doesn't ask again, and
-auto-updates install and relaunch the app in place with no dance at all.
+If you're running a copy older than 1.1.2 (installed before signing),
+macOS blocked it on first launch with a "Not Opened" dialog. The
+simplest fix now is to download the current release, which opens
+normally, or right-click the app and choose Open once; after that,
+auto-update takes over.
 
 ## Double-clicking an OPUS file (.0, .1, ...) doesn't open Spectra Swift
 

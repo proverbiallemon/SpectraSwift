@@ -64,45 +64,16 @@ every parameter from the file in the searchable inspector:
 1. Download `SpectraSwift-<version>.zip` from the
    [latest release](https://github.com/proverbiallemon/SpectraSwift/releases/latest)
 2. Unzip it and drag `Spectra.app` into your Applications folder
-3. **First launch**: see [Bypassing Gatekeeper](#bypassing-gatekeeper) below
+3. Open it. Releases from 1.1.2 on are signed and notarized, so macOS
+   opens them like any other app.
 
 After that the app keeps itself current: it checks for updates once a
 day, and you can check any time with **Spectra Swift ▸ Check for
-Updates**. Updates install and relaunch in place, with no Gatekeeper
-dance the second time around.
+Updates**. Updates install and relaunch in place.
 
 One quirk worth knowing: OPUS files use bare numeric extensions (`.0`,
 `.1`), which other apps sometimes claim. If double-clicking one doesn't
 open Spectra Swift, right-click it and choose **Open With** once.
-
-> **Note**: Spectra Swift isn't signed with an Apple Developer certificate,
-> so macOS will block it on first launch. This is normal for open-source
-> apps distributed outside the App Store.
-
-### Bypassing Gatekeeper
-
-**macOS Sequoia (15.0) and later**
-
-1. Double-click `Spectra.app` and you'll see **"Spectra" Not Opened**
-2. Click **Done** (not "Move to Trash")
-3. Open **System Settings** → **Privacy & Security**
-4. Scroll down to **Security** and find "Spectra was blocked to protect your Mac"
-5. Click **Open Anyway**, then confirm with **Open Anyway** again
-
-**macOS Sonoma (14.x)**
-
-1. Right-click `Spectra.app` and select **Open**
-2. Click **Open** in the dialog that appears
-
-**Terminal alternative** (any version):
-
-```sh
-xattr -cr /Applications/Spectra.app
-```
-
-> **Why does this happen?** Apple requires a $99/year Developer Program
-> membership to sign apps. The app is safe: you can verify by
-> [building from source](#building) or reviewing the code right here.
 
 ## Known issues
 
