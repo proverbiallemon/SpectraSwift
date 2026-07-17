@@ -35,6 +35,10 @@ Updates (the menu item grays out while a check is already running).
 Updates install and relaunch the app in place, with no Gatekeeper dance
 the second time around.
 
+Starting with 1.1.1, the app's Help menu links straight back here:
+Spectra Swift Help opens this wiki, and Tips and Shortcuts jumps to the
+keyboard and gesture reference.
+
 ## Opening your first file
 
 Drop a `.jdx`, `.dx`, or OPUS file (like `.0`) onto the window, use

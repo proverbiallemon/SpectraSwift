@@ -24,8 +24,8 @@ targets:
       properties:
         CFBundleName: Spectra
         CFBundleDisplayName: Spectra Swift
-        CFBundleShortVersionString: "1.1.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "1.1.1"
+        CFBundleVersion: "3"
         LSMinimumSystemVersion: "14.0"
         NSPrincipalClass: NSApplication
         SUFeedURL: https://raw.githubusercontent.com/proverbiallemon/SpectraSwift/main/appcast.xml
