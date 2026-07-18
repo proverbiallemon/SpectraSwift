@@ -79,12 +79,16 @@ public struct SessionSpectrumRef: Sendable, Codable, Identifiable {
     public var color: SessionRGBA
     public var isVisible: Bool
     public var fingerprint: String?
+    /// Security-scoped bookmark data for restoring access to `path` across launches.
+    public var bookmark: Data?
 
     public init(id: UUID, path: String?, inline: SessionInlineSpectrum?,
-                color: SessionRGBA, isVisible: Bool, fingerprint: String? = nil) {
+                color: SessionRGBA, isVisible: Bool, fingerprint: String? = nil,
+                bookmark: Data? = nil) {
         self.id = id; self.path = path; self.inline = inline
         self.color = color; self.isVisible = isVisible
         self.fingerprint = fingerprint
+        self.bookmark = bookmark
     }
 
     /// Cheap content identity: point count plus first/last coordinates.

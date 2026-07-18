@@ -111,3 +111,25 @@ import Foundation
     let decoded = try SessionFile.decode(legacy)
     #expect(decoded.showPeakLabels == nil)
 }
+
+@Test func spectrumRefBookmarkRoundTripsThroughSession() throws {
+    let bookmarkData = Data([0x01, 0x02, 0x03, 0x04])
+    let ref = SessionSpectrumRef(id: UUID(), path: "/tmp/a.jdx", inline: nil,
+                                 color: SessionRGBA(r: 1, g: 0, b: 0, a: 1),
+                                 isVisible: true, bookmark: bookmarkData)
+    let file = SessionFile(spectra: [ref], peaks: [], regions: [], viewport: nil,
+                           displayMode: "absorbance", autoY: false, selectedID: nil)
+    let decoded = try SessionFile.decode(file.encoded())
+    #expect(decoded.spectra.first?.bookmark == bookmarkData)
+}
+
+@Test func spectrumRefDecodesLegacySessionWithoutBookmark() throws {
+    // A pre-1.3.0 session ref has no "bookmark" key; must decode with bookmark == nil.
+    let legacy = """
+    {"id":"11111111-1111-1111-1111-111111111111",
+     "path":"/tmp/a.jdx","isVisible":true,
+     "color":{"r":1,"g":0,"b":0,"a":1}}
+    """.data(using: .utf8)!
+    let ref = try JSONDecoder().decode(SessionSpectrumRef.self, from: legacy)
+    #expect(ref.bookmark == nil)
+}
